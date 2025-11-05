@@ -1,3 +1,8 @@
+#[[
+   SPDX-License-Identifier: AGPL-3.0 OR LicenseRef-Commercial
+   Copyright (c) 2025 Infernet Systems Pvt Ltd
+   Portions copyright (c) Telecom Infra Project (TIP), BSD-3-Clause
+ ]]
 cmake_minimum_required(VERSION 3.13)
 project(owgw VERSION 4.1.0)
 
@@ -178,6 +183,8 @@ add_executable( owgw
         src/SDKcalls.h
         src/StateUtils.cpp src/StateUtils.h
         src/AP_WS_Reactor_Pool.h
+        src/AP_WS_Transport.cpp src/AP_WS_Transport.h
+        src/InfraKafkaConsumer.cpp src/InfraKafkaConsumer.h
         src/AP_WS_Connection.h
         src/AP_WS_Connection.cpp
         src/TelemetryClient.h src/TelemetryClient.cpp

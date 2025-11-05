@@ -1,3 +1,9 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0 OR LicenseRef-Commercial
+ * Copyright (c) 2025 Infernet Systems Pvt Ltd
+ * Portions copyright (c) Telecom Infra Project (TIP), BSD-3-Clause
+ */
+
 //
 //	License type: BSD 3-Clause License
 //	License copy: https://github.com/Telecominfraproject/wlan-cloud-ucentralgw/blob/master/LICENSE
@@ -12,6 +18,7 @@
 #include <ctime>
 #include <mutex>
 #include <thread>
+#include <unordered_map>
 
 #include "Poco/AutoPtr.h"
 #include "Poco/Net/HTTPRequestHandler.h"
@@ -101,6 +108,24 @@ namespace OpenWifi {
 			return Reactor_pool_->NextReactor();
 		}
 
+		/**
+		 * @brief Acquire a database session from the WebSocket reactor pool.
+		 *
+		 * Returns a pooled `LockedDbSession` if the reactor pool is active, otherwise
+		 * lazily creates a standalone session. Guarantees a usable session even when
+		 * the pool is not yet initialised or fully exhausted.
+		 */
+		[[nodiscard]] inline std::shared_ptr<LockedDbSession> NextDbSession() {
+			if (!Reactor_pool_) {
+				return std::make_shared<LockedDbSession>();
+			}
+			auto session = Reactor_pool_->NextDbSession();
+			if (!session) {
+				return std::make_shared<LockedDbSession>();
+			}
+			return session;
+		}
+
 		inline void AddConnection(std::shared_ptr<AP_WS_Connection> Connection) {
 			std::uint64_t sessionHash = SessionHash::Hash(Connection->State_.sessionId);
 			std::lock_guard SessionLock(SessionMutex_[sessionHash]);
@@ -149,6 +174,38 @@ namespace OpenWifi {
 									  std::size_t size);
 		bool SendRadiusCoAData(const std::string &SerialNumber, const unsigned char *buffer,
 							   std::size_t size);
+
+		/**
+		 * @brief Ensure a synthetic AP connection exists for the specified serial.
+		 *
+		 * Reuses an active WebSocket-backed session when possible, revives an existing
+		 * synthetic stub from `PendingSyntheticConnections_`, or creates a new synthetic
+		 * `AP_WS_Connection` populated with the provided peer and simulation state.
+		 */
+		std::shared_ptr<AP_WS_Connection> EnsureSyntheticConnection(uint64_t SerialNumber,
+												 const std::string &PeerEndPoint, bool Simulated);
+		/**
+		 * @brief Locate an AP connection by serial number.
+		 *
+		 * Performs a two-tier lookup: first in the primary `SerialNumbers_` map, then
+		 * against `PendingSyntheticConnections_`, returning a strong reference when a
+		 * live connection (WebSocket or synthetic) is available.
+		 */
+		std::shared_ptr<AP_WS_Connection> FindConnection(uint64_t SerialNumber) const;
+		/**
+		 * @brief Deliver a raw JSON frame to the connection identified by serial.
+		 *
+		 * Resolves the connection via `FindConnection`, verifies it is still alive, and
+		 * pushes the payload through the broker ingress path. Returns false when no
+		 * viable transport is available.
+		 */
+		bool RouteFrameToConnection(uint64_t SerialNumber, const std::string &Payload) const;
+		/**
+		 * @brief Remove any pending synthetic mapping for the specified serial.
+		 *
+		 * Clears the weak-entry in `PendingSyntheticConnections_` 
+		 */
+		void RemoveConnection(uint64_t SerialNumber);
 
 		void StartSession(uint64_t session_id, uint64_t SerialNumber);
 		bool EndSession(uint64_t session_id, uint64_t SerialNumber);
@@ -237,6 +294,9 @@ namespace OpenWifi {
 		Poco::Thread            CleanupThread_;
 		std::mutex              CleanupMutex_;
 		std::deque<std::pair<uint64_t, uint64_t>> CleanupSessions_;
+		mutable std::mutex PendingSyntheticMutex_;
+		mutable std::unordered_map<uint64_t, std::weak_ptr<AP_WS_Connection>> PendingSyntheticConnections_;
+		std::atomic_uint64_t SyntheticSessionId_ = 1;
 
 		std::unique_ptr<AP_WS_ReactorThreadPool> Reactor_pool_;
 		std::atomic_bool Running_ = false;

@@ -1,3 +1,9 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0 OR LicenseRef-Commercial
+ * Copyright (c) 2025 Infernet Systems Pvt Ltd
+ * Portions copyright (c) Telecom Infra Project (TIP), BSD-3-Clause
+ */
+
 //
 //	License type: BSD 3-Clause License
 //	License copy: https://github.com/Telecominfraproject/wlan-cloud-ucentralgw/blob/master/LICENSE
@@ -140,7 +146,7 @@ namespace OpenWifi {
 		bool CreateDefaultDevice(Poco::Data::Session &Session,std::string &SerialNumber,
 								 const Config::Capabilities &Caps,
 								 std::string &Firmware, const Poco::Net::IPAddress &IPAddress,
-								 bool simulated);
+								 bool simulated, const std::string &groupId);
 		bool CreateDevice(Poco::Data::Session &Sess, GWObjects::Device &DeviceDetails);
 
 		bool GetDevice(LockedDbSession &Session, const std::string &SerialNumber, GWObjects::Device &);

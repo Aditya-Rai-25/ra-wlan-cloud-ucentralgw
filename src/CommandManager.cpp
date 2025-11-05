@@ -1,3 +1,9 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0 OR LicenseRef-Commercial
+ * Copyright (c) 2025 Infernet Systems Pvt Ltd
+ * Portions copyright (c) Telecom Infra Project (TIP), BSD-3-Clause
+ */
+
 //
 //	License type: BSD 3-Clause License
 //	License copy: https://github.com/Telecominfraproject/wlan-cloud-ucentralgw/blob/master/LICENSE
@@ -9,6 +15,9 @@
 #include <algorithm>
 
 #include "Poco/JSON/Parser.h"
+#include "Poco/JSON/Stringifier.h"
+#include "Poco/String.h"
+#include <sstream>
 
 #include "AP_WS_Server.h"
 #include "CommandManager.h"
@@ -16,8 +25,13 @@
 #include "framework/MicroServiceFuncs.h"
 #include "framework/ow_constants.h"
 #include "framework/utils.h"
+#include "sdks/sdk_cgw.h"
 
 using namespace std::chrono_literals;
+
+namespace {
+constexpr std::chrono::milliseconds kCommandRestTimeout{30000};
+}
 
 namespace OpenWifi {
 
@@ -405,7 +419,8 @@ namespace OpenWifi {
 	std::shared_ptr<CommandManager::promise_type_t> CommandManager::PostCommand(
 		uint64_t RPC_ID, APCommands::Commands Command, const std::string &SerialNumber,
 		const std::string &CommandStr, const Poco::JSON::Object &Params, const std::string &UUID,
-		bool oneway_rpc, [[maybe_unused]] bool disk_only, bool &Sent, bool rpc, bool Deferred) {
+		bool oneway_rpc, [[maybe_unused]] bool disk_only, bool &Sent, bool rpc, bool Deferred,
+		std::chrono::milliseconds requestTimeout) {
 
 		auto SerialNumberInt = Utils::SerialNumberToInt(SerialNumber);
 		Sent = false;
@@ -424,33 +439,110 @@ namespace OpenWifi {
 			CInfo.State = 1;
 		}
 
-		Poco::JSON::Object CompleteRPC;
-		CompleteRPC.set(uCentralProtocol::JSONRPC, uCentralProtocol::JSONRPC_VERSION);
-		CompleteRPC.set(uCentralProtocol::ID, RPC_ID);
-		CompleteRPC.set(uCentralProtocol::METHOD, CommandStr);
-		CompleteRPC.set(uCentralProtocol::PARAMS, Params);
-		Poco::JSON::Stringifier::stringify(CompleteRPC, ToSend);
+	// Commands targeting synthetic (Kafka-driven) connections still ride the REST bridge before
+	// they reach the device. The call below builds the JSON-RPC envelope, registers a promise so
+	// callers can wait for the returned payload, and forwards evershing to CGW using the same
+	// timeout budget the REST handler provided. Once CGW hands back the device response,
+	// PostCommandResult pushes it onto the in-memory queue so the waiting code path can resume.
+		Poco::JSON::Object::Ptr CompleteRPC(new Poco::JSON::Object);
+		CompleteRPC->set(uCentralProtocol::JSONRPC, uCentralProtocol::JSONRPC_VERSION);
+		CompleteRPC->set(uCentralProtocol::ID, RPC_ID);
+		CompleteRPC->set(uCentralProtocol::METHOD, CommandStr);
+		CompleteRPC->set(uCentralProtocol::PARAMS, Params);
 		CInfo.rpc_entry = rpc ? std::make_shared<CommandManager::promise_type_t>() : nullptr;
 
-		poco_debug(Logger(), fmt::format("{}: Sending command {} to {}. ID: {}", UUID, CommandStr,
-										 SerialNumber, RPC_ID));
+		std::ostringstream serializedPayload;
+		Poco::JSON::Stringifier::stringify(CompleteRPC, serializedPayload);
+		poco_debug(Logger(), fmt::format("{}: Sending command {} to {}. ID: {} Payload: {}", UUID, CommandStr,
+										 SerialNumber, RPC_ID,serializedPayload.str()));
 		//	Do not change the order. It is possible that an RPC completes before it is entered in
 		// the map. So we insert it 	first, even if we may need to remove it later upon failure.
 		if (!oneway_rpc) {
 			std::lock_guard M(Mutex_);
 			OutStandingRequests_[RPC_ID] = CInfo;
 		}
-		if (AP_WS_Server()->SendFrame(SerialNumber, ToSend.str())) {
+
+		Poco::JSON::Object::Ptr deviceResponse;
+		if (SendCommandViaRest(CInfo, SerialNumber, CommandStr, CompleteRPC,
+							     requestTimeout, oneway_rpc, deviceResponse)) {
 			poco_debug(Logger(), fmt::format("{}: Sent command. ID: {}", UUID, RPC_ID));
 			Sent = true;
+			if (!oneway_rpc) {
+				if (deviceResponse) {
+					PostCommandResult(SerialNumber, deviceResponse);
+				} else {
+					poco_warning(Logger(),
+							 fmt::format("{}: Missing device response for command {} ID {}",
+										 UUID, CommandStr, RPC_ID));
+					std::lock_guard M(Mutex_);
+					OutStandingRequests_.erase(RPC_ID);
+					Sent = false;
+					return nullptr;
+				}
+			}
 			return CInfo.rpc_entry;
-		} else if (!oneway_rpc) {
+		}
+
+		if (!oneway_rpc) {
 			std::lock_guard M(Mutex_);
 			OutStandingRequests_.erase(RPC_ID);
 		}
 
 		poco_warning(Logger(), fmt::format("{}: Failed to send command. ID: {}", UUID, RPC_ID));
 		return nullptr;
+	}
+
+	bool CommandManager::SendCommandViaRest([[maybe_unused]] const CommandInfo &info,
+								const std::string &SerialNumber, const std::string &Method,
+								const Poco::JSON::Object::Ptr &RpcPayload,
+								std::chrono::milliseconds requestTimeout, bool oneway,
+								Poco::JSON::Object::Ptr &responseOut) {
+
+			auto groupId = ResolveGroupId(SerialNumber);
+			if (!groupId) {
+				poco_warning(Logger(), fmt::format(
+					"{}: Unable to resolve group id for command {}.", SerialNumber, Method));
+				return false;
+			}
+
+			responseOut = nullptr;
+
+		auto effectiveTimeout = requestTimeout.count() > 0 ? requestTimeout : kCommandRestTimeout;
+			return SDK::CGW::PostInfraCommand(*groupId, SerialNumber, Method, RpcPayload,
+										effectiveTimeout, oneway, responseOut, Logger());
+	}
+
+	std::optional<std::string> CommandManager::ResolveGroupId(const std::string &SerialNumber) {
+		// Prefer in-memory connection metadata first, then fall back to storage.
+		try {
+			auto serialInt = Utils::SerialNumberToInt(SerialNumber);
+			auto connection = AP_WS_Server()->FindConnection(serialInt);
+			if (connection) {
+				auto liveGroupId = connection->GetGroupId();
+				Poco::trimInPlace(liveGroupId);
+				if (!liveGroupId.empty()) {
+					return liveGroupId;
+				}
+			}
+		} catch (...) {
+			// ignore and fall back to storage
+		}
+
+		GWObjects::Device device;
+		if (!StorageService()->GetDevice(SerialNumber, device)) {
+			return std::nullopt;
+		}
+			std::string candidate = device.entity;
+			Poco::trimInPlace(candidate);
+			if (!candidate.empty()) {
+				return candidate;
+			}
+			candidate = device.Venue;
+			Poco::trimInPlace(candidate);
+			if (!candidate.empty()) {
+				return candidate;
+			}
+			return std::nullopt;
 	}
 
 	bool CommandManager::FireAndForget(const std::string &SerialNumber, const std::string &Method, const Poco::JSON::Object &Params) {

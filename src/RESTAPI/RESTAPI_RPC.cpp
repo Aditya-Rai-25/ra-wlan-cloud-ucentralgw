@@ -1,3 +1,9 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0 OR LicenseRef-Commercial
+ * Copyright (c) 2025 Infernet Systems Pvt Ltd
+ * Portions copyright (c) Telecom Infra Project (TIP), BSD-3-Clause
+ */
+
 //
 // Created by stephane bourque on 2021-06-28.
 //
@@ -81,9 +87,10 @@ namespace OpenWifi::RESTAPI_RPC {
 		bool Sent;
 		std::chrono::time_point<std::chrono::high_resolution_clock> rpc_submitted =
 			std::chrono::high_resolution_clock::now();
+		// Propagate WaitTimeInMs so the CGW REST hop shares the REST handler’s timeout budget.
 		std::shared_ptr<CommandManager::promise_type_t> rpc_endpoint =
 			CommandManager()->PostCommand(RPCID, Command, Cmd.SerialNumber, Cmd.Command, Params,
-										  Cmd.UUID, Sent, true, Deferred);
+										  Cmd.UUID, Sent, true, Deferred, WaitTimeInMs);
 
 		if (RetryLater && (!Sent || rpc_endpoint == nullptr)) {
 			Logger.information(fmt::format("{},{}: Pending completion. Device is not connected.",

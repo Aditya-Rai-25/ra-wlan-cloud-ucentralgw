@@ -1,3 +1,9 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0 OR LicenseRef-Commercial
+ * Copyright (c) 2025 Infernet Systems Pvt Ltd
+ * Portions copyright (c) Telecom Infra Project (TIP), BSD-3-Clause
+ */
+
 //
 //	License type: BSD 3-Clause License
 //	License copy: https://github.com/Telecominfraproject/wlan-cloud-ucentralgw/blob/master/LICENSE
@@ -62,6 +68,7 @@ namespace OpenWifi::GWObjects {
 		field_to_json(Obj, "lastRecordedContact", lastRecordedContact);
 		field_to_json(Obj, "certificateExpiryDate", certificateExpiryDate);
 		field_to_json(Obj, "connectReason", connectReason);
+		field_to_json(Obj, "groupId", groupId);
 	}
 
 	void Device::to_json_with_status(Poco::JSON::Object &Obj) const {
@@ -132,6 +139,7 @@ namespace OpenWifi::GWObjects {
 			field_from_json(Obj, "lastRecordedContact", lastRecordedContact);
 			field_from_json(Obj, "certificateExpiryDate", certificateExpiryDate);
 			field_from_json(Obj, "connectReason", connectReason);
+			field_from_json(Obj, "groupId", groupId);
 			return true;
 		} catch (const Poco::Exception &E) {
 		}

@@ -1,3 +1,9 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0 OR LicenseRef-Commercial
+ * Copyright (c) 2025 Infernet Systems Pvt Ltd
+ * Portions copyright (c) Telecom Infra Project (TIP), BSD-3-Clause
+ */
+
 //
 //	License type: BSD 3-Clause License
 //	License copy: https://github.com/Telecominfraproject/wlan-cloud-ucentralgw/blob/master/LICENSE
@@ -95,7 +101,8 @@ namespace OpenWifi {
 						"simulated 		BOOLEAN,"
 						"lastRecordedContact 	BIGINT,"
 						"certificateExpiryDate 	BIGINT,"
-						"connectReason 			TEXT"
+						"connectReason 			TEXT,"
+						"group_id  	VARCHAR(128)"
 						",INDEX DeviceOwner (Owner ASC),"
 						"INDEX LocationIndex (Location ASC))",
 					Poco::Data::Keywords::now;
@@ -131,7 +138,8 @@ namespace OpenWifi {
 						"simulated 		BOOLEAN, "
 						"lastRecordedContact 	BIGINT,"
 						"certificateExpiryDate 	BIGINT,"
-						"connectReason 			TEXT"
+						"connectReason 			TEXT,"
+						"group_id 	VARCHAR(128) "
 						")",
 					Poco::Data::Keywords::now;
 				Sess << "CREATE INDEX IF NOT EXISTS DeviceOwner ON Devices (Owner ASC)",
@@ -154,7 +162,8 @@ namespace OpenWifi {
 				"alter table devices add column lastRecordedContact bigint",
 				"alter table devices add column simulated boolean",
 				"alter table devices add column certificateExpiryDate bigint",
-				"alter table devices add column connectReason TEXT"
+				"alter table devices add column connectReason TEXT",
+				"alter table devices add column group_id varchar(128) ",
 			};
 
 			for (const auto &i : Script) {

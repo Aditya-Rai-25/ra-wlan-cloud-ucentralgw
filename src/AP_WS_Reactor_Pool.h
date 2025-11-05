@@ -1,3 +1,9 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0 OR LicenseRef-Commercial
+ * Copyright (c) 2025 Infernet Systems Pvt Ltd
+ * Portions copyright (c) Telecom Infra Project (TIP), BSD-3-Clause
+ */
+
 //
 // Created by stephane bourque on 2022-02-03.
 //
@@ -63,11 +69,33 @@ namespace OpenWifi {
 			NextReactor_ %= NumberOfThreads_;
 			return std::make_pair(Reactors_[NextReactor_], DbSessions_[NextReactor_]);
 		}
+		/**
+		 * @brief Retrieve the next pooled database session in round-robin order.
+		 *
+		 * The reactor pool pre-allocates one `LockedDbSession` per worker thread during
+		 * `Start()`. Each call here increments a shared index under the pool mutex,
+		 * wraps it modulo `NumberOfThreads_`, and returns the corresponding entry in
+		 * `DbSessions_`.  When the pool is uninitialised (`NumberOfThreads_ == 0`)
+		 * the method returns an empty pointer so callers can fall back to constructing
+		 * their own session.
+		 *
+		 * @return Shared pointer to the selected `LockedDbSession`
+		 */
+		std::shared_ptr<LockedDbSession> NextDbSession() {
+			std::lock_guard Lock(Mutex_);
+			NextDbSession_++;
+			if (NumberOfThreads_ == 0) {
+				return {};
+			}
+			NextDbSession_ %= NumberOfThreads_;
+			return DbSessions_[NextDbSession_];
+		}
 
 	  private:
 		std::mutex Mutex_;
 		uint64_t NumberOfThreads_;
 		uint64_t NextReactor_ = 0;
+		uint64_t NextDbSession_ = 0;
 		std::vector<std::shared_ptr<Poco::Net::SocketReactor>> 	Reactors_;
 		std::vector<std::unique_ptr<Poco::Thread>> 				Threads_;
 		std::vector<std::shared_ptr<LockedDbSession>>			DbSessions_;

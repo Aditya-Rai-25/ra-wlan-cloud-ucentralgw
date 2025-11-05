@@ -1,3 +1,9 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0 OR LicenseRef-Commercial
+ * Copyright (c) 2025 Infernet Systems Pvt Ltd
+ * Portions copyright (c) Telecom Infra Project (TIP), BSD-3-Clause
+ */
+
 //
 //
 // Created by stephane bourque on 2022-10-26.
@@ -20,6 +26,7 @@
 #include "framework/ALBserver.h"
 #include "framework/AuthClient.h"
 #include "framework/KafkaManager.h"
+#include "InfraKafkaConsumer.h"
 #include "framework/MicroService.h"
 #include "framework/MicroServiceErrorHandler.h"
 #include "framework/MicroServiceNames.h"
@@ -440,6 +447,8 @@ namespace OpenWifi {
         if(!InitializedBaseService) {
             InitializedBaseService = true;
             SubSystems_.push_back(KafkaManager());
+//Start InfraKafkaConsumer with the subsystems so CnC_Res topic mesages are handled as the microservice starts.
+			SubSystems_.push_back(InfraKafkaConsumer());
             SubSystems_.push_back(ALBHealthCheckServer());
             SubSystems_.push_back(RESTAPI_ExtServer());
             SubSystems_.push_back(RESTAPI_IntServer());

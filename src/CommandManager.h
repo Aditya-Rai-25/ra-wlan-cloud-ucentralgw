@@ -1,3 +1,9 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0 OR LicenseRef-Commercial
+ * Copyright (c) 2025 Infernet Systems Pvt Ltd
+ * Portions copyright (c) Telecom Infra Project (TIP), BSD-3-Clause
+ */
+
 //
 //	License type: BSD 3-Clause License
 //	License copy: https://github.com/Telecominfraproject/wlan-cloud-ucentralgw/blob/master/LICENSE
@@ -13,6 +19,7 @@
 #include <future>
 #include <map>
 #include <mutex>
+#include <optional>
 #include <utility>
 
 #include "Poco/JSON/Object.h"
@@ -71,38 +78,48 @@ namespace OpenWifi {
 				Utils::SerialNumberToInt(SerialNumber), std::move(Obj)));
 		}
 
+		/* Wrapper helpers set the execution context flags for PostCommand:
+		 *  - oneway_rpc     : whether CGW should stream a response back (false = create promise)
+		 *  - disk_only      : differentiates commands replayed from storage vs live REST calls
+		 *  - rpc            : enables promise creation only for callers waiting synchronously
+		 *  - Deferred       : marks commands scheduled to execute later on the AP
+		 */
 		std::shared_ptr<promise_type_t> PostCommandOneWayDisk(uint64_t RPC_ID,
 															  APCommands::Commands Command,
 															  const std::string &SerialNumber,
 															  const std::string &Method,
 															  const Poco::JSON::Object &Params,
-															  const std::string &UUID, bool &Sent) {
+															  const std::string &UUID, bool &Sent,
+			std::chrono::milliseconds requestTimeout = std::chrono::milliseconds{0}) {
 			return PostCommand(RPC_ID, Command, SerialNumber, Method, Params, UUID, true, true,
-							   Sent, false);
+							   Sent, false, false, requestTimeout);
 		}
 
 		std::shared_ptr<promise_type_t>
 		PostCommandDisk(uint64_t RPC_ID, APCommands::Commands Command,
 						const std::string &SerialNumber, const std::string &Method,
-						const Poco::JSON::Object &Params, const std::string &UUID, bool &Sent) {
+						const Poco::JSON::Object &Params, const std::string &UUID, bool &Sent,
+					 std::chrono::milliseconds requestTimeout = std::chrono::milliseconds{0}) {
 			return PostCommand(RPC_ID, Command, SerialNumber, Method, Params, UUID, false, true,
-							   Sent, false);
+							   Sent, false, false, requestTimeout);
 		}
 
 		std::shared_ptr<promise_type_t>
 		PostCommand(uint64_t RPC_ID, APCommands::Commands Command, const std::string &SerialNumber,
 					const std::string &Method, const Poco::JSON::Object &Params,
-					const std::string &UUID, bool &Sent, bool rpc, bool Deferred) {
+		  			const std::string &UUID, bool &Sent, bool rpc, bool Deferred,
+				 std::chrono::milliseconds requestTimeout = std::chrono::milliseconds{0}) {
 			return PostCommand(RPC_ID, Command, SerialNumber, Method, Params, UUID, false, false,
-							   Sent, rpc, Deferred);
+							   Sent, rpc, Deferred, requestTimeout);
 		}
 
 		std::shared_ptr<promise_type_t>
 		PostCommandOneWay(uint64_t RPC_ID, APCommands::Commands Command,
 						  const std::string &SerialNumber, const std::string &Method,
-						  const Poco::JSON::Object &Params, const std::string &UUID, bool &Sent) {
+						  const Poco::JSON::Object &Params, const std::string &UUID, bool &Sent,
+					   std::chrono::milliseconds requestTimeout = std::chrono::milliseconds{0}) {
 			return PostCommand(RPC_ID, Command, SerialNumber, Method, Params, UUID, true, false,
-							   Sent, false);
+							   Sent, false, false, requestTimeout);
 		}
 
 		bool IsCommandRunning(const std::string &C);
@@ -184,7 +201,14 @@ namespace OpenWifi {
 		PostCommand(uint64_t RPCID, APCommands::Commands Command, const std::string &SerialNumber,
 					const std::string &Method, const Poco::JSON::Object &Params,
 					const std::string &UUID, bool oneway_rpc, bool disk_only, bool &Sent,
-					bool rpc_call, bool Deferred = false);
+					bool rpc_call, bool Deferred = false,
+					std::chrono::milliseconds requestTimeout = std::chrono::milliseconds{0});
+
+		bool SendCommandViaRest([[maybe_unused]] const CommandInfo &info, const std::string &SerialNumber,
+							 const std::string &Method, const Poco::JSON::Object::Ptr &RpcPayload,
+							 std::chrono::milliseconds requestTimeout, bool oneway,
+							 Poco::JSON::Object::Ptr &responseOut);
+		std::optional<std::string> ResolveGroupId(const std::string &SerialNumber);
 
 		bool CompleteScriptCommand(CommandInfo &Command, const Poco::JSON::Object::Ptr &Payload,
 								   std::chrono::duration<double, std::milli> rpc_execution_time);

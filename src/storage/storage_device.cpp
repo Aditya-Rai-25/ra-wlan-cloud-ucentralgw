@@ -1,3 +1,9 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0 OR LicenseRef-Commercial
+ * Copyright (c) 2025 Infernet Systems Pvt Ltd
+ * Portions copyright (c) Telecom Infra Project (TIP), BSD-3-Clause
+ */
+
 //
 //	License type: BSD 3-Clause License
 //	License copy: https://github.com/Telecominfraproject/wlan-cloud-ucentralgw/blob/master/LICENSE
@@ -55,7 +61,8 @@ namespace OpenWifi {
 												   "simulated,"
 												   "lastRecordedContact,"
 												   "certificateExpiryDate,"
-												   "connectReason "
+												   "connectReason, "
+												   "group_id "
 	};
 
 	const static std::string DB_DeviceUpdateFields{"SerialNumber=?,"
@@ -88,18 +95,19 @@ namespace OpenWifi {
 												   "simulated=?,"
 												   "lastRecordedContact=?, "
 												   "certificateExpiryDate=?,"
-												   "connectReason=? "
+												   "connectReason=?, "
+												   "group_id=? "
 	};
 
 	const static std::string DB_DeviceInsertValues{
-		" VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "};
+		" VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "};
 
 	typedef Poco::Tuple<std::string, std::string, std::string, std::string, std::string,
 						std::string, std::string, std::string, std::string, std::string,
 						std::string, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, std::string,
 						std::string, std::string, std::string, uint64_t, std::string, bool,
 						std::string, std::string, std::string, std::uint64_t, bool, std::uint64_t,
-						std::uint64_t, std::string>
+						std::uint64_t, std::string,std::string>
 		DeviceRecordTuple;
 	typedef std::vector<DeviceRecordTuple> DeviceRecordList;
 
@@ -136,6 +144,7 @@ namespace OpenWifi {
 		D.lastRecordedContact = R.get<28>();
 		D.certificateExpiryDate = R.get<29>();
 		D.connectReason = R.get<30>();
+		D.groupId = R.get<31>();
 	}
 
 	void ConvertDeviceRecord(const GWObjects::Device &D, DeviceRecordTuple &R) {
@@ -170,6 +179,7 @@ namespace OpenWifi {
 		R.set<28>(D.lastRecordedContact);
 		R.set<29>(D.certificateExpiryDate);
 		R.set<30>(D.connectReason);
+		R.set<31>(D.groupId);
 	}
 
 	bool Storage::GetDeviceCount(uint64_t &Count, const std::string &platform) {
@@ -205,7 +215,7 @@ namespace OpenWifi {
 			if(!platform.empty()) {
 				if (includeProvisioned == false) {
 
-					whereClause = fmt::format("WHERE entity='' and venue='' and DeviceType='" + platform + "'");
+					whereClause = fmt::format("WHERE entity='' and venue='' and group_id='' and DeviceType='" + platform + "'");
 				} else {
 					whereClause = fmt::format("WHERE DeviceType='" + platform + "'");
 				}
@@ -214,7 +224,7 @@ namespace OpenWifi {
 				//st = "SELECT SerialNumber From Devices WHERE DeviceType='" + platform + "' ";
 			} else {
 				if (includeProvisioned == false) {
-					whereClause = fmt::format("WHERE entity='' and venue=''");
+					whereClause = fmt::format("WHERE entity='' and venue='' and group_id=''");
 				}
 				//st = "SELECT SerialNumber From Devices ";
 			}
@@ -567,7 +577,7 @@ namespace OpenWifi {
 	bool Storage::CreateDefaultDevice(Poco::Data::Session &Session, std::string &SerialNumber, const Config::Capabilities &Caps,
 									  std::string &Firmware,
 									  const Poco::Net::IPAddress &IPAddress,
-									  bool simulated) {
+									  bool simulated,const std::string &groupId) {
 
 		GWObjects::Device D;
 
@@ -622,6 +632,7 @@ namespace OpenWifi {
 		D.Manufacturer = Caps.Model();
 		D.Firmware = Firmware;
 		D.simulated = simulated;
+		D.groupId = groupId;
 		D.Notes = SecurityObjects::NoteInfoVec{
 			SecurityObjects::NoteInfo{(uint64_t)Utils::Now(), "", "Auto-provisioned."}};
 

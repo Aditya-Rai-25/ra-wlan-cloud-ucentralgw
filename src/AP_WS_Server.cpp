@@ -1,3 +1,9 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0 OR LicenseRef-Commercial
+ * Copyright (c) 2025 Infernet Systems Pvt Ltd
+ * Portions copyright (c) Telecom Infra Project (TIP), BSD-3-Clause
+ */
+
 //
 //	License type: BSD 3-Clause License
 //	License copy: https://github.com/Telecominfraproject/wlan-cloud-ucentralgw/blob/master/LICENSE
@@ -303,8 +309,9 @@ namespace OpenWifi {
 											AddCleanupSession(Device->State_.sessionId, Device->SerialNumberInt_);
 											++hint;
 											// hint = SerialNumbers_[hashIndex].erase(hint);
-										} else if (RightNow > Device->LastContact_ &&
-												   (RightNow - Device->LastContact_) > SessionTimeOut_) {
+										} else if (!Device->IsSynthetic() &&
+											   RightNow > Device->LastContact_ &&
+											   (RightNow - Device->LastContact_) > SessionTimeOut_) {
 											poco_information(
 												LocalLogger,
 												fmt::format(
@@ -349,7 +356,8 @@ namespace OpenWifi {
 										// hint = Sessions_[i].erase(hint);
 										AddCleanupSession(hint->second->State_.sessionId, hint->second->SerialNumberInt_);
 										++hint;
-									} else if (RightNow > hint->second->LastContact_ &&
+									} else if (!hint->second->IsSynthetic() &&
+											   RightNow > hint->second->LastContact_ &&
 											   (RightNow - hint->second->LastContact_) >
 												   SessionTimeOut_) {
 										poco_information(
@@ -512,7 +520,7 @@ namespace OpenWifi {
 		return true;
 
 	}
-
+// Promote real websocket session: now that this serial has an active WebSocket, drop any pending synthetic placeholder.
 	void AP_WS_Server::StartSession(uint64_t session_id, uint64_t SerialNumber) {
 		auto sessionHash = SessionHash::Hash(session_id);
 		std::shared_ptr<AP_WS_Connection> Connection;
@@ -529,6 +537,7 @@ namespace OpenWifi {
 		auto deviceHash = MACHash::Hash(SerialNumber);
 		std::lock_guard DeviceLock(SerialNumbersMutex_[deviceHash]);
 		SerialNumbers_[deviceHash][SerialNumber] = Connection;
+		RemoveConnection(SerialNumber);
 	}
 
 	bool AP_WS_Server::EndSession(uint64_t session_id, uint64_t SerialNumber) {
@@ -556,6 +565,7 @@ namespace OpenWifi {
 			SerialNumbers_[hashIndex].erase(DeviceHint);
 			poco_trace(Logger(), fmt::format("Ended session 2: {} for device: {}", session_id, Utils::IntToSerialNumber(SerialNumber)));
 		}
+		RemoveConnection(SerialNumber);
 		return true;
 	}
 
@@ -782,7 +792,7 @@ namespace OpenWifi {
 			Connection = DeviceHint->second;
 		}
 
-		if(Connection->Dead_) {
+		if (!Connection || Connection->Dead_) {
 			return false;
 		}
 		try {
@@ -795,4 +805,86 @@ namespace OpenWifi {
 		return false;
 	}
 
+	std::shared_ptr<AP_WS_Connection>
+	AP_WS_Server::FindConnection(uint64_t SerialNumber) const {
+		std::shared_ptr<AP_WS_Connection> Connection;
+		{
+			auto hashIndex = MACHash::Hash(SerialNumber);
+			std::lock_guard DeviceLock(SerialNumbersMutex_[hashIndex]);
+			auto DeviceHint = SerialNumbers_[hashIndex].find(SerialNumber);
+			if (DeviceHint != end(SerialNumbers_[hashIndex]) && DeviceHint->second)
+				Connection = DeviceHint->second;
+		}
+		if (Connection)
+			return Connection;
+		{
+			std::lock_guard PendingLock(PendingSyntheticMutex_);
+			auto Pending = PendingSyntheticConnections_.find(SerialNumber);
+			if (Pending != PendingSyntheticConnections_.end()) {
+				Connection = Pending->second.lock();
+				if (!Connection)
+					PendingSyntheticConnections_.erase(Pending);
+			}
+		}
+		return Connection;
+	}
+
+	std::shared_ptr<AP_WS_Connection>
+	AP_WS_Server::EnsureSyntheticConnection(uint64_t SerialNumber, const std::string &PeerEndPoint, bool Simulated) {
+		const auto SerialString = Utils::IntToSerialNumber(SerialNumber);
+		auto Connection = FindConnection(SerialNumber);
+		if (Connection && !Connection->Dead_) {
+			poco_information(Logger(), fmt::format("AP_WS_Server: reusing connection for {} via peer {}", SerialString, PeerEndPoint));
+			Connection->SetSyntheticPeer(PeerEndPoint);
+			Connection->InitializeSyntheticIdentity(SerialString, SerialNumber);
+			Connection->SetSyntheticAttributes(Simulated);
+			return Connection;
+		}
+
+		{
+			std::lock_guard PendingLock(PendingSyntheticMutex_);
+			auto Pending = PendingSyntheticConnections_.find(SerialNumber);
+			if (Pending != PendingSyntheticConnections_.end()) {
+				auto Existing = Pending->second.lock();
+				if (Existing && !Existing->Dead_) {
+					poco_information(Logger(), fmt::format("AP_WS_Server: activating pending synthetic connection for {}", SerialString));
+					Existing->SetSyntheticPeer(PeerEndPoint);
+					Existing->InitializeSyntheticIdentity(SerialString, SerialNumber);
+					Existing->SetSyntheticAttributes(Simulated);
+					return Existing;
+				}
+				PendingSyntheticConnections_.erase(Pending);
+			}
+		}
+
+		auto SessionId = SyntheticSessionId_.fetch_add(1, std::memory_order_relaxed);
+		auto DbSession = NextDbSession();
+		auto NewConnection = std::make_shared<AP_WS_Connection>(SessionId, Logger(), DbSession);
+		NewConnection->SetSyntheticPeer(PeerEndPoint);
+		NewConnection->InitializeSyntheticIdentity(SerialString, SerialNumber);
+		NewConnection->SetSyntheticAttributes(Simulated);
+		AddConnection(NewConnection);
+		NewConnection->Start();
+		{
+			std::lock_guard PendingLock(PendingSyntheticMutex_);
+			PendingSyntheticConnections_[SerialNumber] = NewConnection;
+		}
+		poco_information(Logger(), fmt::format("AP_WS_Server: created synthetic connection session={} serial={} peer={}", SessionId, SerialString, PeerEndPoint));
+		return NewConnection;
+	}
+
+	bool AP_WS_Server::RouteFrameToConnection(uint64_t SerialNumber, const std::string &Payload) const {
+		auto Connection = FindConnection(SerialNumber);
+		if (!Connection || Connection->Dead_)
+			return false;
+		poco_trace(Logger(), fmt::format("AP_WS_Server: routing synthetic frame to serial={} session={}", Utils::IntToSerialNumber(SerialNumber), Connection->State_.sessionId));
+		Connection->InboundFromBroker(Payload);
+		return true;
+	}
+
+	void AP_WS_Server::RemoveConnection(uint64_t SerialNumber) {
+		std::lock_guard PendingLock(PendingSyntheticMutex_);
+		PendingSyntheticConnections_.erase(SerialNumber);
+		poco_trace(Logger(), fmt::format("AP_WS_Server: removed pending synthetic entry for {}", Utils::IntToSerialNumber(SerialNumber)));
+	}
 } // namespace OpenWifi

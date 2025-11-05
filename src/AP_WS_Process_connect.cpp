@@ -1,3 +1,9 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0 OR LicenseRef-Commercial
+ * Copyright (c) 2025 Infernet Systems Pvt Ltd
+ * Portions copyright (c) Telecom Infra Project (TIP), BSD-3-Clause
+ */
+
 //
 // Created by stephane bourque on 2022-07-26.
 //
@@ -80,7 +86,7 @@ namespace OpenWifi {
 			State_.UUID = UUID;
 			State_.Firmware = Firmware;
 			State_.PendingUUID = 0;
-			State_.Address = Utils::FormatIPv6(WS_->peerAddress().toString());
+			State_.Address = PeerEndPoint_;
 			CId_ = SerialNumber_ + "@" + CId_;
 
 			auto Platform = Poco::toLower(Caps.Platform());
@@ -89,7 +95,7 @@ namespace OpenWifi {
 				State_.connectReason = ParamsObj->get("reason").toString();
 			}
 
-			auto IP = PeerAddress_.toString();
+			auto IP = PeerEndPoint_.empty() ? PeerAddress_.toString() : PeerEndPoint_;
 			if (IP.substr(0, 7) == "::ffff:") {
 				IP = IP.substr(7);
 			}
@@ -114,6 +120,13 @@ namespace OpenWifi {
 			std::lock_guard DbSessionLock(DbSession_->Mutex());
 
 			auto DeviceExists = StorageService()->GetDevice(DbSession_->Session(), SerialNumber_, DeviceInfo);
+			auto connectionGroupId = GetGroupId();
+			if (DeviceExists && connectionGroupId.empty()) {
+				connectionGroupId = DeviceInfo.groupId;
+				SetGroupId(connectionGroupId);
+			} else if (!connectionGroupId.empty()) {
+				SetGroupId(connectionGroupId);
+			}
 			if (Daemon()->AutoProvisioning() && !DeviceExists) {
 				//	check the firmware version. if this is too old, we cannot let that device connect yet, we must
 				//	force a firmware upgrade
@@ -148,7 +161,11 @@ namespace OpenWifi {
 				} else {
 					StorageService()->CreateDefaultDevice( DbSession_->Session(),
 						SerialNumber_, Caps, Firmware, PeerAddress_,
-						State_.VerifiedCertificate == GWObjects::SIMULATED);
+						State_.VerifiedCertificate == GWObjects::SIMULATED,
+						connectionGroupId);
+					if (!connectionGroupId.empty()) {
+						SetGroupId(connectionGroupId);
+					}
 				}
 			} else if (!Daemon()->AutoProvisioning() && !DeviceExists) {
 				SendKafkaDeviceNotProvisioned(SerialNumber_, Firmware, Compatible_, CId_);
@@ -179,6 +196,12 @@ namespace OpenWifi {
 					State_.connectReason = ParamsObj->get("reason").toString();
 					DeviceInfo.connectReason = State_.connectReason;
 					++Updated;
+				}
+
+				if(!connectionGroupId.empty() && DeviceInfo.groupId != connectionGroupId) {
+					DeviceInfo.groupId = connectionGroupId;
+					++Updated;
+					SetGroupId(connectionGroupId);
 				}
 
 				if(DeviceInfo.DevicePassword!=DevicePassword) {
