@@ -1,3 +1,8 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0 OR LicenseRef-Commercial
+ * Copyright (c) 2025 Infernet Systems Pvt Ltd
+ * Portions copyright (c) Telecom Infra Project (TIP), BSD-3-Clause
+ */
 //
 // Created by stephane bourque on 2022-02-21.
 //
@@ -432,6 +437,10 @@ namespace OpenWifi::RESTAPI::Errors {
     static const struct msg InvalidRadiusServer { 1191, "Invalid Radius Server." };
 
 	static const struct msg InvalidRRMAction { 1192, "Invalid RRM Action." };
+
+	static const struct msg DeviceGroupNotSet {
+		1193, "Device group is not set."
+	};
 
     static const struct msg SimulationDoesNotExist {
         7000, "Simulation Instance ID does not exist."

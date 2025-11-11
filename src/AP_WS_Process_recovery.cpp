@@ -1,3 +1,8 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0 OR LicenseRef-Commercial
+ * Copyright (c) 2025 Infernet Systems Pvt Ltd
+ * Portions copyright (c) Telecom Infra Project (TIP), BSD-3-Clause
+ */
 //
 // Created by stephane bourque on 2022-07-26.
 //
@@ -38,6 +43,23 @@ namespace OpenWifi {
 			StorageService()->AddLog(*DbSession_, DeviceLog);
 
 			if (ParamsObj->get(uCentralProtocol::REBOOT).toString() == "true") {
+				GWObjects::Device DeviceInfo;
+				if (!StorageService()->GetDevice(SerialNumber_, DeviceInfo)) {
+					poco_warning(Logger_,
+								 fmt::format("RECOVERY({}): Unable to load device {} for reboot.",
+											 CId_, SerialNumber_));
+					return;
+				}
+
+				std::string DeviceGroupId = DeviceInfo.groupId;
+				Poco::trimInPlace(DeviceGroupId);
+				if(DeviceGroupId.empty()||DeviceGroupId=="0"){
+					poco_warning(Logger_,
+								 fmt::format("RECOVERY({}): Device {} missing groupId, reboot skipped.",
+											 CId_, SerialNumber_));
+					return;
+				}
+
 				GWObjects::CommandDetails Cmd;
 				Cmd.SerialNumber = SerialNumber_;
 				Cmd.UUID = MicroServiceCreateUUID();

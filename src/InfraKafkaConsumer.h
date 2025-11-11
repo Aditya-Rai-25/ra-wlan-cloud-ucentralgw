@@ -90,10 +90,6 @@ namespace OpenWifi {
          */
         void HandleLeave(const Poco::JSON::Object::Ptr &Message);
         /**
-         * @brief process infra_request_result payloads.
-         */
-        void HandleRequestResult(const Poco::JSON::Object::Ptr &Message);
-        /**
          * @brief Processes miscellaneous frames destined for an existing synthetic session(state).
          */
         void HandleGeneric(const Poco::JSON::Object::Ptr &Message, const std::string &RawPayload);

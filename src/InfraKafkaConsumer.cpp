@@ -245,11 +245,6 @@ namespace OpenWifi {
             return;
         }
 
-        if (Type == "infra_request_result") {
-            HandleRequestResult(Message);
-            return;
-        }
-
     }
 
     std::string InfraKafkaConsumer::NormalizeSerial(const std::string &Serial) {
@@ -370,40 +365,6 @@ namespace OpenWifi {
         }
         poco_information(Logger(), fmt::format("InfraKafkaConsumer: infra_leave serial={}", Serial));
         Connection->EndConnection();
-    }
-
-    void InfraKafkaConsumer::HandleRequestResult(const Poco::JSON::Object::Ptr &Message) {
-        if (!Message->has("received_payload")) {
-            poco_warning(Logger(), "InfraKafkaConsumer: infra_request_result missing received_payload");
-            return;
-        }
-
-        std::string Payload;
-        try {
-            Payload = Message->get("received_payload").convert<std::string>();
-        } catch (const Poco::Exception &E) {
-            poco_warning(Logger(), fmt::format("InfraKafkaConsumer: unable to convert received_payload: {}", E.displayText()));
-            return;
-        }
-
-        if (Payload.empty()) {
-            poco_warning(Logger(), "InfraKafkaConsumer: infra_request_result received empty payload");
-            return;
-        }
-
-        auto Serial = ExtractSerialFromPayload(Payload);
-        if (Serial.empty()) {
-            poco_warning(Logger(), fmt::format(
-                "InfraKafkaConsumer: infra_request_result could not determine serial from payload={}",
-                Payload));
-            return;
-        }
-
-        auto SerialNumber = Utils::SerialNumberToInt(Serial);
-        if (!AP_WS_Server()->RouteFrameToConnection(SerialNumber, Payload)) {
-            poco_warning(Logger(), fmt::format(
-                "InfraKafkaConsumer: dropping infra_request_result for offline device {}", Serial));
-        }
     }
 
     void InfraKafkaConsumer::HandleGeneric(const Poco::JSON::Object::Ptr &Message, const std::string &RawPayload) {

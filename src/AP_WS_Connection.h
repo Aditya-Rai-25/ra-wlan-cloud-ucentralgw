@@ -65,6 +65,16 @@ namespace OpenWifi {
 		void OnSocketError(const Poco::AutoPtr<Poco::Net::ErrorNotification> &pNf);
 
 		/**
+		 * @brief Wrapper to account for REST-bridged TX bytes.
+		 */
+		void AccountExternalFrameSent(std::size_t bytes);
+
+		/**
+		 * @brief Wrapper to account for REST-bridged RX bytes and bookkeeping.
+		 */
+		void AccountExternalResponse(std::size_t bytes);
+
+		/**
 		 * @brief Inject a Kafka-delivered frame into the connection processing pipeline.
 		 *
 		 * Used by `InfraKafkaConsumer::HandleJoin` and other broker paths to hand synthetic

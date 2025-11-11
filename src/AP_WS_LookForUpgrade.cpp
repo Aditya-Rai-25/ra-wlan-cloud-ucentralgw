@@ -1,3 +1,8 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0 OR LicenseRef-Commercial
+ * Copyright (c) 2025 Infernet Systems Pvt Ltd
+ * Portions copyright (c) Telecom Infra Project (TIP), BSD-3-Clause
+ */
 
 #include <AP_WS_Connection.h>
 #include "ConfigurationCache.h"
@@ -20,6 +25,14 @@ namespace OpenWifi {
 
 		GWObjects::Device D;
 		if (!StorageService()->GetDevice(Session,SerialNumber_, D)) {
+			return false;
+		}
+		std::string DeviceGroupId = D.groupId;
+		Poco::trimInPlace(DeviceGroupId);
+		if(DeviceGroupId.empty()||DeviceGroupId=="0"){
+			poco_warning(Logger_,
+						 fmt::format("CFG-UPGRADE({}): Device {} missing groupId, skipping command.",
+									 CId_, SerialNumber_));
 			return false;
 		}
 

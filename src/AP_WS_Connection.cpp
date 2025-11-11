@@ -491,6 +491,16 @@ namespace OpenWifi {
 		State_.LastContact = LastContact_ = Utils::Now();
 	}
 
+	void AP_WS_Connection::AccountExternalFrameSent(std::size_t bytes) {
+		RecordFrameSent(bytes);
+	}
+
+	void AP_WS_Connection::AccountExternalResponse(std::size_t bytes) {
+		RecordFrameReceived(bytes);
+		RecordMessageCount();
+		UpdateLastContact();
+	}
+
 	void AP_WS_Connection::OnPing() {
 		std::lock_guard G(ConnectionMutex_);
 		if (KafkaManager()->Enabled()) {

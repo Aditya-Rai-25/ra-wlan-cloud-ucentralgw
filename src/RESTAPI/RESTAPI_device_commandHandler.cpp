@@ -1,3 +1,8 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0 OR LicenseRef-Commercial
+ * Copyright (c) 2025 Infernet Systems Pvt Ltd
+ * Portions copyright (c) Telecom Infra Project (TIP), BSD-3-Clause
+ */
 //
 //	License type: BSD 3-Clause License
 //	License copy: https://github.com/Telecominfraproject/wlan-cloud-ucentralgw/blob/master/LICENSE
@@ -193,6 +198,14 @@ namespace OpenWifi {
 			return NotFound();
 		}
 
+		std::string DeviceGroupId = TheDevice.groupId;
+		Poco::trimInPlace(DeviceGroupId);
+		if(DeviceGroupId.empty()||DeviceGroupId=="0"){
+			poco_warning(Logger_,
+						 fmt::format("POST-DEVICE-COMMAND: TID={} user={} serial={} missing groupId",
+									 TransactionId_, Requester(), SerialNumber_));
+			return BadRequest(RESTAPI::Errors::DeviceGroupNotSet);
+		}
 		for (const auto &PostCommand : PostCommands) {
 			if (Command == PostCommand.Command) {
 				Poco::Thread::current()->setName(

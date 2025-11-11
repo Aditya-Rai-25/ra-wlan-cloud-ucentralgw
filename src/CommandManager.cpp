@@ -507,9 +507,51 @@ namespace OpenWifi {
 
 			responseOut = nullptr;
 
-		auto effectiveTimeout = requestTimeout.count() > 0 ? requestTimeout : kCommandRestTimeout;
-			return SDK::CGW::PostInfraCommand(*groupId, SerialNumber, Method, RpcPayload,
+			auto effectiveTimeout = requestTimeout.count() > 0 ? requestTimeout : kCommandRestTimeout;
+			auto sent = SDK::CGW::PostInfraCommand(*groupId, SerialNumber, Method, RpcPayload,
 										effectiveTimeout, oneway, responseOut, Logger());
+
+			if (sent && RpcPayload) {
+				try {
+					std::ostringstream txStream;
+					Poco::JSON::Stringifier::stringify(RpcPayload, txStream);
+					const auto txBytes = txStream.str().size();
+					if (txBytes > 0) {
+						auto serialInt = Utils::SerialNumberToInt(SerialNumber);
+						if (auto connection = AP_WS_Server()->FindConnection(serialInt)) {
+							connection->AccountExternalFrameSent(txBytes);
+						} 
+					}
+				} catch (const std::exception &E) {
+					poco_debug(Logger(), fmt::format(
+						"{}: Failed to record TX metrics for {}: {}", SerialNumber, Method, E.what()));
+				} catch (...) {
+					poco_debug(Logger(), fmt::format(
+						"{}: Failed to record TX metrics for {} due to unknown error.", SerialNumber, Method));
+				}
+			}
+
+			if (sent && !oneway && !responseOut.isNull()) {
+				try {
+					auto serialInt = Utils::SerialNumberToInt(SerialNumber);
+					std::ostringstream rxStream;
+					Poco::JSON::Stringifier::stringify(*responseOut, rxStream);
+					const auto rxBytes = rxStream.str().size();
+					if (rxBytes > 0) {
+						if (auto connection = AP_WS_Server()->FindConnection(serialInt)) {
+							connection->AccountExternalResponse(rxBytes);
+						} 
+					}
+				} catch (const std::exception &E) {
+					poco_debug(Logger(), fmt::format(
+						"{}: Failed to record RX metrics for {}: {}", SerialNumber, Method, E.what()));
+				} catch (...) {
+					poco_debug(Logger(), fmt::format(
+						"{}: Failed to record RX metrics for {} due to unknown error.", SerialNumber, Method));
+				}
+			}
+
+			return sent;
 	}
 
 	std::optional<std::string> CommandManager::ResolveGroupId(const std::string &SerialNumber) {
@@ -529,20 +571,13 @@ namespace OpenWifi {
 		}
 
 		GWObjects::Device device;
-		if (!StorageService()->GetDevice(SerialNumber, device)) {
-			return std::nullopt;
+		if (StorageService()->GetDevice(SerialNumber, device)) {
+    		auto group = device.groupId;
+    		Poco::trimInPlace(group);
+    		if (!group.empty())
+        		return group;
 		}
-			std::string candidate = device.entity;
-			Poco::trimInPlace(candidate);
-			if (!candidate.empty()) {
-				return candidate;
-			}
-			candidate = device.Venue;
-			Poco::trimInPlace(candidate);
-			if (!candidate.empty()) {
-				return candidate;
-			}
-			return std::nullopt;
+		return std::nullopt;
 	}
 
 	bool CommandManager::FireAndForget(const std::string &SerialNumber, const std::string &Method, const Poco::JSON::Object &Params) {
