@@ -39,6 +39,17 @@
 
 namespace OpenWifi {
 
+	bool AP_WS_Connection::ForwardTelemetryCommand(uint64_t rpcId, const std::string &serialNumber,
+									 const Poco::JSON::Object &params) {
+			bool sent = false;
+			std::string uuid{};
+			CommandManager()->PostCommand(rpcId, APCommands::Commands::telemetry, serialNumber,
+										  uCentralProtocol::TELEMETRY, params, uuid, sent, false,
+										  false);
+			if (!sent) 
+				poco_error(Logger_, fmt::format("Telemetry send failure({}):RPCID:{},serialNumber:{}", sent,rpcId,serialNumber));
+		return sent;
+	}
 	void AP_WS_Connection::LogException(const Poco::Exception &E) {
 		poco_information(Logger_, fmt::format("EXCEPTION({}): {}", CId_, E.displayText()));
 	}
@@ -607,9 +618,6 @@ namespace OpenWifi {
 	bool AP_WS_Connection::StartTelemetry(uint64_t RPCID,
 										  const std::vector<std::string> &TelemetryTypes) {
 		poco_information(Logger_, fmt::format("TELEMETRY({}): Starting.", CId_));
-		Poco::JSON::Object StartMessage;
-		StartMessage.set("jsonrpc", "2.0");
-		StartMessage.set("method", "telemetry");
 		Poco::JSON::Object Params;
 		Params.set("serial", SerialNumber_);
 		Params.set("interval", (uint64_t)TelemetryInterval_);
@@ -623,30 +631,17 @@ namespace OpenWifi {
 				Types.add(type);
 		}
 		Params.set(RESTAPI::Protocol::TYPES, Types);
-		StartMessage.set("id", RPCID);
-		StartMessage.set("params", Params);
-		Poco::JSON::Stringifier Stringify;
-		std::ostringstream OS;
-		Stringify.condense(StartMessage, OS);
-		return Send(OS.str());
+		return ForwardTelemetryCommand(RPCID, SerialNumber_, Params);
 	}
 
 	bool AP_WS_Connection::StopTelemetry(uint64_t RPCID) {
 		poco_information(Logger_, fmt::format("TELEMETRY({}): Stopping.", CId_));
-		Poco::JSON::Object StopMessage;
-		StopMessage.set("jsonrpc", "2.0");
-		StopMessage.set("method", "telemetry");
 		Poco::JSON::Object Params;
 		Params.set("serial", SerialNumber_);
 		Params.set("interval", 0);
-		StopMessage.set("id", RPCID);
-		StopMessage.set("params", Params);
-		Poco::JSON::Stringifier Stringify;
-		std::ostringstream OS;
-		Stringify.condense(StopMessage, OS);
 		TelemetryKafkaPackets_ = TelemetryWebSocketPackets_ = TelemetryInterval_ =
 			TelemetryKafkaTimer_ = TelemetryWebSocketTimer_ = 0;
-		return Send(OS.str());
+		return ForwardTelemetryCommand(RPCID, SerialNumber_, Params);
 	}
 
 	void AP_WS_Connection::UpdateCounts() {
