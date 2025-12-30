@@ -3,6 +3,7 @@
 //
 
 #include "RADIUSSessionTracker.h"
+#include "AP_ServerProvider.h"
 #include <fmt/format.h>
 #include <framework/utils.h>
 
@@ -376,7 +377,7 @@ namespace OpenWifi {
 		P.AppendAttribute(RADIUS::Attributes::PROXY_STATE, ProxyState);
 		P.RecomputeAuthenticator(session->secret);
 		P.Log(std::cout);
-		AP_WS_Server()->SendRadiusCoAData(session->serialNumber, P.Buffer(), P.Size_);
+		GetAPServer()->SendRadiusCoAData(session->serialNumber, P.Buffer(), P.Size_);
 
 		return true;
 	}

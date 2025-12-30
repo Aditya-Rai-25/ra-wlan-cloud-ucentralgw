@@ -60,7 +60,7 @@ namespace OpenWifi {
 			StateUtils::ComputeAssociations(StateObj, State_.Associations_2G,
 											State_.Associations_5G, State_.Associations_6G, State_.uptime);
 
-			if (KafkaManager()->Enabled() && !AP_DeviceServer()->KafkaDisableState()) {
+			if (KafkaManager()->Enabled() && !GetAPServer()->KafkaDisableState()) {
 				KafkaManager()->PostMessage(KafkaTopics::STATE, SerialNumber_, *ParamsObj);
 			}
 

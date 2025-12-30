@@ -12,6 +12,8 @@ namespace OpenWifi {
 						 const std::string &SubSystem)
 		: SubSystemServer(Name, ShortName, SubSystem) {}
 
+	AP_Server::~AP_Server() = default;
+
 	bool AP_Server::GetHealthDevices(std::uint64_t lowLimit, std::uint64_t highLimit,
 									 std::vector<std::string> &SerialNumbers) {
 		SerialNumbers.clear();
@@ -165,6 +167,46 @@ namespace OpenWifi {
 			return false;
 		}
 		return Connection->State_.Connected;
+	}
+	
+	bool AP_Server::Disconnect(uint64_t SerialNumber) {
+		std::shared_ptr<AP_Connection> Connection;
+		{
+			auto hashIndex = MACHash::Hash(SerialNumber);
+			std::lock_guard DeviceLock(SerialNumbersMutex_[hashIndex]);
+			auto DeviceHint = SerialNumbers_[hashIndex].find(SerialNumber);
+			if (DeviceHint == SerialNumbers_[hashIndex].end() || DeviceHint->second == nullptr) {
+				return false;
+			}
+			Connection = DeviceHint->second;
+			SerialNumbers_[hashIndex].erase(DeviceHint);
+		}
+
+		{
+			auto H = SessionHash::Hash(Connection->State_.sessionId);
+			std::lock_guard SessionLock(SessionMutex_[H]);
+			Sessions_[H].erase(Connection->State_.sessionId);
+		}
+
+		return true;
+	}
+
+	void AP_Server::CleanupSessions() {
+
+		while(Running_) {
+			std::this_thread::sleep_for(std::chrono::seconds(10));
+
+			while(Running_ && !CleanupSessions_.empty()) {
+				std::pair<uint64_t, uint64_t> Session;
+				{
+					std::lock_guard G(CleanupMutex_);
+					Session = CleanupSessions_.front();
+					CleanupSessions_.pop_front();
+				}
+				poco_trace(this->Logger(),fmt::format("Cleaning up session: {} for device: {}", Session.first, Utils::IntToSerialNumber(Session.second)));
+				EndSession(Session.first, Session.second);
+			}
+		}
 	}
 
 	bool AP_Server::SendFrame(uint64_t SerialNumber, const std::string &Payload) const {

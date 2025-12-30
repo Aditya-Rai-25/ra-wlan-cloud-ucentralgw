@@ -54,8 +54,9 @@ namespace OpenWifi {
 
 	class AP_Server : public SubSystemServer, public Poco::Runnable {
 	  public:
-		virtual ~AP_Server() = default;
-
+		virtual ~AP_Server();
+		virtual bool ValidateCertificate(const std::string &ConnectionId,
+										   const Poco::Crypto::X509Certificate &Certificate)=0;
 		bool GetHealthDevices(std::uint64_t lowLimit, std::uint64_t highLimit,
 							  std::vector<std::string> &SerialNumbers);
 
@@ -78,7 +79,8 @@ namespace OpenWifi {
 
 		void StartSession(uint64_t session_id, uint64_t SerialNumber);
 		bool EndSession(uint64_t session_id, uint64_t SerialNumber);
-
+		bool Disconnect(uint64_t SerialNumber);
+		void CleanupSessions();
 		bool Connected(uint64_t SerialNumber, GWObjects::DeviceRestrictions &Restrictions) const;
 		bool Connected(uint64_t SerialNumber) const;
 		inline bool Connected(const std::string &SerialNumber,
@@ -152,6 +154,34 @@ namespace OpenWifi {
 		[[nodiscard]] inline bool Running() const { return Running_; }
 		bool KafkaDisableState() const { return KafkaDisableState_; }
 		bool KafkaDisableHealthChecks() const { return KafkaDisableHealthChecks_; }
+		[[nodiscard]] inline bool DeviceRequiresSecureRTTY(uint64_t serialNumber) const {
+			std::shared_ptr<AP_Connection> Connection;
+			{
+				auto hashIndex = MACHash::Hash(serialNumber);
+				std::lock_guard DeviceLock(SerialNumbersMutex_[hashIndex]);
+				auto DeviceHint = SerialNumbers_[hashIndex].find(serialNumber);
+				if (DeviceHint == end(SerialNumbers_[hashIndex]) || DeviceHint->second == nullptr)
+					return false;
+				Connection = DeviceHint->second;
+			}
+			return Connection->RTTYMustBeSecure_;
+		}
+		inline bool IsSimSerialNumber(const std::string &SerialNumber) const {
+			return IsSim(SerialNumber) &&
+				   SerialNumber == SimulatorId_;
+		}
+
+		inline static bool IsSim(const std::string &SerialNumber) {
+			return SerialNumber.substr(0, 6) == "53494d";
+		}
+
+		[[nodiscard]] inline bool IsSimEnabled() const { return SimulatorEnabled_; }
+		[[nodiscard]] inline bool AllowSerialNumberMismatch() const {
+			return AllowSerialNumberMismatch_;
+		}
+		[[nodiscard]] inline uint64_t MismatchDepth() const { return MismatchDepth_; }
+		[[nodiscard]] inline bool UseProvisioning() const { return LookAtProvisioning_; }
+		[[nodiscard]] inline bool UseDefaults() const { return UseDefaultConfig_; }
 
 	  protected:
 		explicit AP_Server(const std::string &Name, const std::string &ShortName,
@@ -179,6 +209,13 @@ namespace OpenWifi {
 
 		std::atomic_bool KafkaDisableState_ = false;
 		std::atomic_bool KafkaDisableHealthChecks_ = false;
+		std::string SimulatorId_;
+		bool LookAtProvisioning_ = false;
+		bool UseDefaultConfig_ = true;
+		bool SimulatorEnabled_ = false;
+		bool AllowSerialNumberMismatch_ = true;
+		std::uint64_t MismatchDepth_ = 2;
+
 	};
 
 } // namespace OpenWifi

@@ -5,7 +5,7 @@
 #include "rttys/RTTYS_server.h"
 #include "rttys/RTTYS_WebServer.h"
 
-#include "AP_WS_Server.h"
+#include "AP_ServerProvider.h"
 
 #include "fmt/format.h"
 #include "framework/MicroServiceFuncs.h"
@@ -214,7 +214,7 @@ namespace OpenWifi {
 					poco_debug(Logger(),fmt::format("{}: Device has certificate.", CId_));
 					Cert = std::make_unique<Poco::Crypto::X509Certificate>(SS->peerCertificate());
 					cn = Poco::trim(Poco::toLower(Cert->commonName()));
-					if (AP_WS_Server()->ValidateCertificate(CId_, *Cert)) {
+					if (GetAPServer()->ValidateCertificate(CId_, *Cert)) {
 						poco_information(
 							Logger(),
 							fmt::format("{}: Device {} has been validated.", cn, CId_));

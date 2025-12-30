@@ -6,7 +6,7 @@
 //	Arilia Wireless Inc.
 //
 
-#include "AP_WS_Server.h"
+#include "AP_ServerProvider.h"
 #include "CapabilitiesCache.h"
 #include "CentralConfig.h"
 #include "ConfigurationCache.h"
@@ -581,7 +581,7 @@ namespace OpenWifi {
 
 		bool Found = false;
 		std::string FoundConfig;
-		if (AP_WS_Server()->UseProvisioning()) {
+		if (GetAPServer()->UseProvisioning()) {
 			if (SDKCalls::GetProvisioningConfiguration(SerialNumber, FoundConfig)) {
 				if (FoundConfig != "none") {
 					Found = true;
@@ -592,7 +592,7 @@ namespace OpenWifi {
 			}
 		}
 
-		if (!Found && AP_WS_Server()->UseDefaults() &&
+		if (!Found && GetAPServer()->UseDefaults() &&
 			FindDefaultConfigurationForModel(Caps.Compatible(), Caps.Platform(), DefConfig)) {
 			Config::Config NewConfig(DefConfig.configuration);
 			NewConfig.SetUUID(Now);
@@ -1092,7 +1092,7 @@ namespace OpenWifi {
 				UpdateCountedMap(Dashboard.deviceType, DeviceType);
 
 				GWObjects::ConnectionState ConnState;
-				if (AP_WS_Server()->GetState(SerialNumber, ConnState)) {
+				if (GetAPServer()->GetState(SerialNumber, ConnState)) {
 					UpdateCountedMap(Dashboard.status,
 									 ConnState.Connected ? "connected" : "not connected");
 					UpdateCountedMap(Dashboard.certificates,
@@ -1100,12 +1100,12 @@ namespace OpenWifi {
 					UpdateCountedMap(Dashboard.lastContact,
 									 ComputeUpLastContactTag(ConnState.LastContact));
 					GWObjects::HealthCheck HC;
-					if (AP_WS_Server()->GetHealthcheck(SerialNumber, HC))
+					if (GetAPServer()->GetHealthcheck(SerialNumber, HC))
 						UpdateCountedMap(Dashboard.healths, ComputeSanityTag(HC.Sanity));
 					else
 						UpdateCountedMap(Dashboard.healths, ComputeSanityTag(100));
 					std::string LastStats;
-					if (AP_WS_Server()->GetStatistics(SerialNumber, LastStats) &&
+					if (GetAPServer()->GetStatistics(SerialNumber, LastStats) &&
 						!LastStats.empty()) {
 						Poco::JSON::Parser P;
 

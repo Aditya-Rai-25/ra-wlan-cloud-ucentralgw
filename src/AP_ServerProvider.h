@@ -19,7 +19,7 @@ namespace OpenWifi {
 		AP_ServerProvider() = default;
 	};
 
-	inline AP_Server *AP_DeviceServer() { return AP_ServerProvider::Get(); }
+	inline AP_Server *GetAPServer() { return AP_ServerProvider::Get(); }
 
 } // namespace OpenWifi
 

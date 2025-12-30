@@ -267,7 +267,7 @@ namespace OpenWifi {
 					Offset++;
 					GWObjects::CommandDetails R;
 					ConvertCommandRecord(i, R);
-					if (AP_DeviceServer()->Connected(Utils::SerialNumberToInt(R.SerialNumber)))
+					if (GetAPServer()->Connected(Utils::SerialNumberToInt(R.SerialNumber)))
 						Commands.push_back(R);
 				}
 
@@ -503,7 +503,7 @@ namespace OpenWifi {
 			for (const auto &record : Records) {
 				GWObjects::CommandDetails R;
 				ConvertCommandRecord(record, R);
-				if (AP_DeviceServer()->Connected(Utils::SerialNumberToInt(R.SerialNumber)))
+				if (GetAPServer()->Connected(Utils::SerialNumberToInt(R.SerialNumber)))
 					Commands.push_back(R);
 			}
 			return true;

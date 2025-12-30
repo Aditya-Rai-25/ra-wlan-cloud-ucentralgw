@@ -58,7 +58,7 @@ namespace OpenWifi {
 
 	static std::string ALBHealthCallback() {
 		uint64_t Connections, AverageConnectionTime, NumberOfConnectingDevices;
-		AP_WS_Server()->AverageDeviceStatistics(Connections, AverageConnectionTime,
+		GetAPServer()->AverageDeviceStatistics(Connections, AverageConnectionTime,
 								NumberOfConnectingDevices);
 		std::ostringstream os;
 		os << 	"Connections: " << Connections << std::endl <<

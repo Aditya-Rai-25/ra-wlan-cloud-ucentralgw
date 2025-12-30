@@ -3,7 +3,7 @@
 //
 
 #include "TelemetryClient.h"
-#include "AP_WS_Server.h"
+#include "AP_ServerProvider.h"
 #include "CommandManager.h"
 #include "TelemetryStream.h"
 
@@ -76,7 +76,7 @@ namespace OpenWifi {
 	void TelemetryClient::SendTelemetryShutdown() {
 		poco_information(Logger(), fmt::format("TELEMETRY-SHUTDOWN({}): Closing.", CId_));
 		DeRegister();
-		AP_WS_Server()->StopWebSocketTelemetry(CommandManager()->Next_RPC_ID(), SerialNumber_);
+		GetAPServer()->StopWebSocketTelemetry(CommandManager()->Next_RPC_ID(), SerialNumber_);
 		TelemetryStream()->DeRegisterClient(UUID_);
 	}
 

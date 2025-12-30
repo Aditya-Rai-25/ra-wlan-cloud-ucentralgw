@@ -11,7 +11,7 @@
 
 #include "Daemon.h"
 #ifdef TIP_GATEWAY_SERVICE
-#include "AP_WS_Server.h"
+#include "AP_ServerProvider.h"
 #include "StorageService.h"
 #include "CapabilitiesCache.h"
 #include "RADIUSSessionTracker.h"
@@ -74,7 +74,7 @@ namespace OpenWifi::GWObjects {
         if (Res.has_value()) {
             Res.value().to_json(SerialNumber,Obj);
 #else
-        if (AP_WS_Server()->GetState(SerialNumber, ConState)) {
+        if (GetAPServer()->GetState(SerialNumber, ConState)) {
 			ConState.to_json(SerialNumber,Obj);
 #endif
 		} else {

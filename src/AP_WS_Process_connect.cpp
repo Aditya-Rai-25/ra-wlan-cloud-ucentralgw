@@ -3,6 +3,7 @@
 //
 
 #include "AP_Connection.h"
+#include "AP_ServerProvider.h"
 #include "AP_WS_Server.h"
 #include "CentralConfig.h"
 #include "Daemon.h"
@@ -71,7 +72,7 @@ namespace OpenWifi {
 
 			CommandManager()->ClearQueue(SerialNumberInt_);
 
-			AP_WS_Server()->StartSession(State_.sessionId, SerialNumberInt_);
+			GetAPServer()->StartSession(State_.sessionId, SerialNumberInt_);
 
 			Config::Capabilities Caps(Capabilities);
 
@@ -251,8 +252,8 @@ namespace OpenWifi {
 
 			if (State_.VerifiedCertificate == GWObjects::VALID_CERTIFICATE) {
 				if ((Utils::SerialNumberMatch(CN_, SerialNumber_,
-											  (int)AP_WS_Server()->MismatchDepth())) ||
-					AP_WS_Server()->IsSimSerialNumber(CN_)) {
+											  (int)GetAPServer()->MismatchDepth())) ||
+					GetAPServer()->IsSimSerialNumber(CN_)) {
 					State_.VerifiedCertificate = GWObjects::VERIFIED;
 					poco_information(Logger_,
 									 fmt::format("CONNECT({}): Fully validated and authenticated "
@@ -261,7 +262,7 @@ namespace OpenWifi {
 												 State_.connectionCompletionTime));
 				} else {
 					State_.VerifiedCertificate = GWObjects::MISMATCH_SERIAL;
-					if (AP_WS_Server()->AllowSerialNumberMismatch()) {
+					if (GetAPServer()->AllowSerialNumberMismatch()) {
 						poco_information(
 							Logger_,
 							fmt::format("CONNECT({}): Serial number mismatch allowed. CN={} "

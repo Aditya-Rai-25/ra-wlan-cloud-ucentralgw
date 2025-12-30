@@ -17,7 +17,7 @@
 
 #include "RESTAPI_device_helper.h"
 
-#include "AP_WS_Server.h"
+#include "AP_ServerProvider.h"
 
 namespace OpenWifi {
 	void RESTAPI_device_handler::DoGet() {
@@ -82,8 +82,8 @@ namespace OpenWifi {
 			return OK();
 
 		} else if (StorageService()->DeleteDevice(SerialNumber)) {
-			if(AP_WS_Server()->Connected(Utils::SerialNumberToInt(SerialNumber))) {
-				AP_WS_Server()->Disconnect(Utils::SerialNumberToInt(SerialNumber));
+			if(GetAPServer()->Connected(Utils::SerialNumberToInt(SerialNumber))) {
+				GetAPServer()->Disconnect(Utils::SerialNumberToInt(SerialNumber));
 			}
 			return OK();
 		}

@@ -7,6 +7,7 @@
 #include "Poco/Notification.h"
 #include "Poco/NotificationQueue.h"
 
+#include "AP_ServerProvider.h"
 #include "AP_WS_Server.h"
 #include "sdks/sdk_prov.h"
 
@@ -95,7 +96,7 @@ namespace OpenWifi {
 		}
 
 		inline void SendToDevice(const std::string &SerialNumber, const std::string &Payload) {
-			AP_WS_Server()->SendFrame(SerialNumber, Payload);
+			GetAPServer()->SendFrame(SerialNumber, Payload);
 		}
 
 		inline void run() final {
