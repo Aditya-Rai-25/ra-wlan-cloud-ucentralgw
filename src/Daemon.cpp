@@ -15,6 +15,7 @@
 #include <framework/UI_WebSocketClientServer.h>
 #include <framework/default_device_types.h>
 
+#include "AP_ServerProvider.h"
 #include "AP_WS_Server.h"
 #include "CommandManager.h"
 #include "Daemon.h"
@@ -71,6 +72,7 @@ namespace OpenWifi {
 		DeviceTypes_ = DefaultDeviceTypeList;
 		WebSocketProcessor_ = std::make_unique<GwWebSocketClient>(logger());
 		MicroServiceALBCallback(ALBHealthCallback);
+		AP_ServerProvider::Register(AP_WS_Server());
 	}
 
 	[[nodiscard]] std::string Daemon::IdentifyDevice(const std::string &Id) const {

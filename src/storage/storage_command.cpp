@@ -12,7 +12,7 @@
 #include "Poco/Data/RecordSet.h"
 #include "Poco/File.h"
 
-#include "AP_WS_Server.h"
+#include "AP_ServerProvider.h"
 #include "CommandManager.h"
 #include "Daemon.h"
 #include "FileUploader.h"
@@ -267,7 +267,7 @@ namespace OpenWifi {
 					Offset++;
 					GWObjects::CommandDetails R;
 					ConvertCommandRecord(i, R);
-					if (AP_WS_Server()->Connected(Utils::SerialNumberToInt(R.SerialNumber)))
+					if (AP_DeviceServer()->Connected(Utils::SerialNumberToInt(R.SerialNumber)))
 						Commands.push_back(R);
 				}
 
@@ -503,7 +503,7 @@ namespace OpenWifi {
 			for (const auto &record : Records) {
 				GWObjects::CommandDetails R;
 				ConvertCommandRecord(record, R);
-				if (AP_WS_Server()->Connected(Utils::SerialNumberToInt(R.SerialNumber)))
+				if (AP_DeviceServer()->Connected(Utils::SerialNumberToInt(R.SerialNumber)))
 					Commands.push_back(R);
 			}
 			return true;
