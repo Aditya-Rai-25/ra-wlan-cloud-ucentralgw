@@ -6,7 +6,9 @@
 
 #include <shared_mutex>
 #include <string>
+#include <vector>
 
+#include "Poco/Crypto/X509Certificate.h"
 #include "Poco/Net/HTTPServer.h"
 #include "Poco/Net/SocketAcceptor.h"
 #include "Poco/Net/SocketReactor.h"
@@ -164,6 +166,7 @@ namespace OpenWifi {
 
 		bool ValidId(const std::string &Id);
 		inline auto Uptime() const { return Utils::Now() - Started_; }
+		inline bool IsCertOk() const { return IssuerCert_ != nullptr; }
 
 
 	  private:
@@ -186,6 +189,9 @@ namespace OpenWifi {
 
 		void RemoveDeviceEventHandlers(const Poco::Net::Socket &Socket);
 		void AddDeviceEventHandlers(Poco::Net::Socket &Socket);
+
+		bool ValidateCertificate(const std::string &ConnectionId,
+								 const Poco::Crypto::X509Certificate &Certificate);
 
 		void AddConnectedDeviceEventHandlers(std::shared_ptr<RTTYS_EndPoint> ep);
 		void AddClientEventHandlers(Poco::Net::WebSocket &Socket,
@@ -248,6 +254,8 @@ namespace OpenWifi {
 		std::map<int, std::shared_ptr<RTTYS_EndPoint>> 			Connected_; //	id, endpoint
 		std::map<int, std::shared_ptr<RTTYS_EndPoint>> 			Clients_;
 		std::map<int, std::unique_ptr<SecureSocketPair>>		Sockets_;
+		std::vector<Poco::Crypto::X509Certificate>				ClientCasCerts_;
+		std::unique_ptr<Poco::Crypto::X509Certificate>			IssuerCert_;
 
 		Poco::Timer Timer_;
 		std::unique_ptr<Poco::TimerCallback<RTTYS_server>> GCCallBack_;

@@ -42,37 +42,13 @@ namespace OpenWifi {
 		bool ValidateCertificate(const std::string &ConnectionId,
 								 const Poco::Crypto::X509Certificate &Certificate);
 
-		// inline bool IsSimSerialNumber(const std::string &SerialNumber) const {
-		// 	return IsSim(SerialNumber) &&
-		// 		   SerialNumber == SimulatorId_;
-		// }
-
-		// inline static bool IsSim(const std::string &SerialNumber) {
-		// 	return SerialNumber.substr(0, 6) == "53494d";
-		// }
-
 		void run() override; // Garbage collector thread.
-		//[[nodiscard]] inline bool IsSimEnabled() const { return SimulatorEnabled_; }
-		// [[nodiscard]] inline bool AllowSerialNumberMismatch() const {
-		// 	return AllowSerialNumberMismatch_;
-		// }
-		// [[nodiscard]] inline uint64_t MismatchDepth() const { return MismatchDepth_; }
-		// [[nodiscard]] inline bool UseProvisioning() const { return LookAtProvisioning_; }
-		// [[nodiscard]] inline bool UseDefaults() const { return UseDefaultConfig_; }
+		
 		[[nodiscard]] inline std::pair<std::shared_ptr<Poco::Net::SocketReactor>,
 									   std::shared_ptr<LockedDbSession>>
 		NextReactor() {
 			return Reactor_pool_->NextReactor();
 		}
-
-		// inline void AddConnection(std::shared_ptr<AP_WS_Connection> Connection) {
-		// 	AP_Server::AddConnection(std::move(Connection));
-		// }
-
-
-	//	bool Disconnect(uint64_t SerialNumber);
-
-	//	void CleanupSessions();
 
 	  private:
 		std::unique_ptr<Poco::Crypto::X509Certificate> IssuerCert_;
@@ -81,15 +57,7 @@ namespace OpenWifi {
 		Poco::ThreadPool DeviceConnectionPool_{"ws:dev-pool", 4, 256};
 		Poco::Net::SocketReactor Reactor_;
 		Poco::Thread ReactorThread_;
-		// std::string SimulatorId_;
-		// bool LookAtProvisioning_ = false;
-		// bool UseDefaultConfig_ = true;
-		// bool SimulatorEnabled_ = false;
-		// bool AllowSerialNumberMismatch_ = true;
-
 		std::unique_ptr<AP_WS_ReactorThreadPool> Reactor_pool_;
-
-//		std::uint64_t MismatchDepth_ = 2;
 
 		Poco::Thread CleanupThread_;
 		Poco::Thread GarbageCollector_;
