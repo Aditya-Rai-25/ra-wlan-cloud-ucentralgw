@@ -44,7 +44,19 @@ namespace OpenWifi {
 		std::string SerialNumber = GetBinding(RESTAPI::Protocol::SERIALNUMBER, "");
 
 		if(!RESTAPI_utils::IsRootOrAdmin(UserInfo_.userinfo)) {
-			return UnAuthorized(RESTAPI::Errors::ACCESS_DENIED);
+			if(UserInfo_.userinfo.userRole != SecurityObjects::SUBSCRIBER) {
+				Logger().error(fmt::format("Delete request denied for user: [{}]", UserInfo_.userinfo.id));
+				return UnAuthorized(RESTAPI::Errors::ACCESS_DENIED);
+			}
+			GWObjects::Device device;
+			if (!StorageService()->GetDevice(SerialNumber, device)){
+				Logger().error(fmt::format("No device found with serialnumber: [{}]", SerialNumber));
+				return NotFound();
+			}
+			if (device.subscriber != UserInfo_.userinfo.id){
+				Logger().error(fmt::format("Delete request of device: [{}] denied for subscriber: [{}]", SerialNumber, UserInfo_.userinfo.id));
+				return UnAuthorized(RESTAPI::Errors::ACCESS_DENIED);
+			}
 		}
 
 		if (!Utils::NormalizeMac(SerialNumber)) {
@@ -85,6 +97,7 @@ namespace OpenWifi {
 			if(AP_WS_Server()->Connected(Utils::SerialNumberToInt(SerialNumber))) {
 				AP_WS_Server()->Disconnect(Utils::SerialNumberToInt(SerialNumber));
 			}
+			Logger().information(fmt::format("Successfully deleted device: [{}] of subscriber: [{}]", SerialNumber, UserInfo_.userinfo.id));
 			return OK();
 		}
 
