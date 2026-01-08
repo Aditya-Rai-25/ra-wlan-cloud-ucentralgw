@@ -1,3 +1,8 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0 OR LicenseRef-Commercial
+ * Copyright (c) 2025 Infernet Systems Pvt Ltd
+ * Portions copyright (c) Telecom Infra Project (TIP), BSD-3-Clause
+ */
 //
 // Created by stephane bourque on 2022-07-26.
 //
@@ -81,7 +86,7 @@ namespace OpenWifi {
 			State_.UUID = UUID;
 			State_.Firmware = Firmware;
 			State_.PendingUUID = 0;
-			State_.Address = Utils::FormatIPv6(PeerAddress_.toString());
+			State_.Address = Address_;
 			CId_ = SerialNumber_ + "@" + CId_;
 
 			auto Platform = Poco::toLower(Caps.Platform());

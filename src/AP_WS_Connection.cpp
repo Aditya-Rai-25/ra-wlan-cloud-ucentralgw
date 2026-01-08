@@ -1,3 +1,8 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0 OR LicenseRef-Commercial
+ * Copyright (c) 2025 Infernet Systems Pvt Ltd
+ * Portions copyright (c) Telecom Infra Project (TIP), BSD-3-Clause
+ */
 //
 // Created by stephane bourque on 2022-02-03.
 //
@@ -26,7 +31,6 @@
 #include <GWKafkaEvents.h>
 
 namespace OpenWifi {
-	static class AP_WS_Server *WSServerPtr = nullptr;
 
 	AP_WS_Connection::AP_WS_Connection(Poco::Net::HTTPServerRequest &request,
 									   Poco::Net::HTTPServerResponse &response,
@@ -47,9 +51,7 @@ namespace OpenWifi {
 		WS_->setBlocking(false);
 		uuid_ = MicroServiceRandom(std::numeric_limits<std::uint64_t>::max()-1);
 
-		if(WSServerPtr==nullptr) {
-			WSServerPtr = dynamic_cast<class AP_WS_Server *>(GetAPServer());
-		}
+		class AP_WS_Server *WSServerPtr = dynamic_cast<class AP_WS_Server *>(GetAPServer());
 		WSServerPtr->IncrementConnectionCount();
 	}
 
@@ -71,6 +73,7 @@ namespace OpenWifi {
 
 	AP_WS_Connection::~AP_WS_Connection() {
 		std::lock_guard G(ConnectionMutex_);
+		class AP_WS_Server *WSServerPtr = dynamic_cast<class AP_WS_Server *>(GetAPServer());
 		WSServerPtr->DecrementConnectionCount();
 		EndConnection();
 		poco_debug(Logger_, fmt::format("TERMINATION({}): Session={}, Connection removed.", SerialNumber_,
@@ -103,6 +106,7 @@ namespace OpenWifi {
 			if(!SerialNumber_.empty()) {
 				DeviceDisconnectionCleanup(SerialNumber_, uuid_);
 			}
+			class AP_WS_Server *WSServerPtr = dynamic_cast<class AP_WS_Server *>(GetAPServer());
 			WSServerPtr->AddCleanupSession(State_.sessionId, SerialNumberInt_);
 		}
 	}
@@ -119,7 +123,7 @@ namespace OpenWifi {
 			auto SockImpl = dynamic_cast<Poco::Net::WebSocketImpl *>(WS_->impl());
 			auto SS =
 				dynamic_cast<Poco::Net::SecureStreamSocketImpl *>(SockImpl->streamSocketImpl());
-
+			Address_ = Utils::FormatIPv6(WS_->peerAddress().toString());
 			PeerAddress_ = SS->peerAddress().host();
 			CId_ = Utils::FormatIPv6(SS->peerAddress().toString());
 
@@ -145,6 +149,7 @@ namespace OpenWifi {
 			}
 
 			Poco::Crypto::X509Certificate PeerCert(SS->peerCertificate());
+			class AP_WS_Server *WSServerPtr = dynamic_cast<class AP_WS_Server *>(GetAPServer());
 			if (!WSServerPtr->ValidateCertificate(CId_, PeerCert)) {
 				State_.VerifiedCertificate = GWObjects::NO_CERTIFICATE;
 				poco_warning(Logger_,
@@ -281,6 +286,7 @@ namespace OpenWifi {
 		std::lock_guard	G(ConnectionMutex_);
 
 		State_.LastContact = LastContact_ = Utils::Now();
+		class AP_WS_Server *WSServerPtr = dynamic_cast<class AP_WS_Server *>(GetAPServer());
 		if (WSServerPtr->Running() && (DeviceValidated_ || ValidatedDevice())) {
 			try {
 				return ProcessIncomingFrame();
@@ -319,6 +325,7 @@ namespace OpenWifi {
 			IncomingFrame.append(0);
 
 			State_.RX += IncomingSize;
+			class AP_WS_Server *WSServerPtr = dynamic_cast<class AP_WS_Server *>(GetAPServer());
 			WSServerPtr->AddRX(IncomingSize);
 			State_.MessageCount++;
 			State_.LastContact = Utils::Now();
@@ -516,6 +523,7 @@ namespace OpenWifi {
 			}
 #endif
 			State_.TX += BytesSent;
+			class AP_WS_Server *WSServerPtr = dynamic_cast<class AP_WS_Server *>(GetAPServer());
 			WSServerPtr->AddTX(BytesSent);
 			return BytesSent == Payload.size();
 		} catch (const Poco::Exception &E) {

@@ -1,3 +1,8 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0 OR LicenseRef-Commercial
+ * Copyright (c) 2025 Infernet Systems Pvt Ltd
+ * Portions copyright (c) Telecom Infra Project (TIP), BSD-3-Clause
+ */
 //
 // Created by stephane bourque on 2022-02-03.
 //
@@ -129,6 +134,7 @@ namespace OpenWifi {
 		std::string CN_;
 		uint64_t Errors_ = 0;
 		Poco::Net::IPAddress PeerAddress_;
+		std::string Address_;
 		volatile bool TelemetryReporting_ = false;
 		std::atomic_uint64_t TelemetryWebSocketRefCount_ = 0;
 		std::atomic_uint64_t TelemetryKafkaRefCount_ = 0;
