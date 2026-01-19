@@ -21,6 +21,7 @@
 #include <framework/default_device_types.h>
 
 #include "AP_ServerProvider.h"
+#include "AP_KAFKA_Server.h"
 #include "AP_WS_Server.h"
 #include "CommandManager.h"
 #include "Daemon.h"
@@ -52,7 +53,8 @@ namespace OpenWifi {
 				UI_WebSocketClientServer(), OUIServer(), FindCountryFromIP(),
 				CommandManager(), FileUploader(), StorageArchiver(), TelemetryStream(),
 				RTTYS_server(), RADIUS_proxy_server(), VenueBroadcaster(), ScriptManager(),
-				SignatureManager(), AP_WS_Server(),
+				SignatureManager(),
+				AP_KAFKA_Server(),
 				RegulatoryInfo(),
 				RADIUSSessionTracker(),
 			 	AP_WS_ConfigAutoUpgradeAgent(),
@@ -77,7 +79,9 @@ namespace OpenWifi {
 		DeviceTypes_ = DefaultDeviceTypeList;
 		WebSocketProcessor_ = std::make_unique<GwWebSocketClient>(logger());
 		MicroServiceALBCallback(ALBHealthCallback);
-		AP_ServerProvider::Register(AP_WS_Server());
+		//const auto UseKafkaCnC = config().getBool("openwifi.kafka.cnc.enable", false);
+		//AP_ServerProvider::Register(UseKafkaCnC ? static_cast<AP_Server *>(AP_KAFKA_Server())										: static_cast<AP_Server *>(AP_WS_Server()));
+		AP_ServerProvider::Register(AP_KAFKA_Server());
 	}
 
 	[[nodiscard]] std::string Daemon::IdentifyDevice(const std::string &Id) const {
