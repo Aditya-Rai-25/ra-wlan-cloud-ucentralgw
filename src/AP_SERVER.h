@@ -101,6 +101,17 @@ namespace OpenWifi {
 			return SendFrame(Utils::SerialNumberToInt(SerialNumber), Payload);
 		}
 
+		[[nodiscard]] inline std::shared_ptr<AP_Connection>
+		GetConnection(uint64_t SerialNumber) const {
+			auto hashIndex = MACHash::Hash(SerialNumber);
+			std::lock_guard DeviceLock(SerialNumbersMutex_[hashIndex]);
+			auto it = SerialNumbers_[hashIndex].find(SerialNumber);
+			if (it == end(SerialNumbers_[hashIndex])) {
+				return nullptr;
+			}
+			return it->second;
+		}
+
 		void SetWebSocketTelemetryReporting(uint64_t RPCID, uint64_t SerialNumber,
 											uint64_t Interval, uint64_t Lifetime,
 											const std::vector<std::string> &TelemetryTypes);
