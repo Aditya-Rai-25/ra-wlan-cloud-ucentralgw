@@ -79,8 +79,6 @@ namespace OpenWifi {
 		DeviceTypes_ = DefaultDeviceTypeList;
 		WebSocketProcessor_ = std::make_unique<GwWebSocketClient>(logger());
 		MicroServiceALBCallback(ALBHealthCallback);
-		//const auto UseKafkaCnC = config().getBool("openwifi.kafka.cnc.enable", false);
-		//AP_ServerProvider::Register(UseKafkaCnC ? static_cast<AP_Server *>(AP_KAFKA_Server())										: static_cast<AP_Server *>(AP_WS_Server()));
 		AP_ServerProvider::Register(AP_KAFKA_Server());
 	}
 

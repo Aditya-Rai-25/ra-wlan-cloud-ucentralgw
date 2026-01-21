@@ -25,13 +25,10 @@ namespace OpenWifi {
 		bool ValidateCertificate(const std::string &ConnectionId,
 								 const Poco::Crypto::X509Certificate &Certificate) override;
 
-		void run() override; // Garbage collector thread.
+	//	void run() override; // Garbage collector thread.
 
 	  private:
 		std::uint64_t WatcherId_ = 0;
-
-		Poco::Thread GarbageCollector_;
-
 		inline static std::atomic_uint64_t session_id_ = 0;
 
 		void OnKafkaMessage(const std::string &key, const std::string &payload);
@@ -40,7 +37,7 @@ namespace OpenWifi {
 		void HandleDeviceMessage(Poco::JSON::Object::Ptr msg, const std::string &key,
 								 const std::string &rawPayload);
 
-		AP_KAFKA_Server() noexcept : AP_Server("KafkaCnCServer", "KAFKA-CNC", "ucentral.kafka") {}
+		AP_KAFKA_Server() noexcept : AP_Server("KafkaServer", "KAFKA-SERVER", "ucentral.kafka") {}
 	};
 
 	inline auto AP_KAFKA_Server() { return AP_KAFKA_Server::instance(); }

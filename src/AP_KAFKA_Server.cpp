@@ -33,17 +33,9 @@ namespace OpenWifi {
 
 	int AP_KAFKA_Server::Start() {
 
-		std::string s="";
-		std::cout<<"Avinash val:"<<Utils::ValidSerialNumber(s)<<std::endl;
-		std::string B="";
-		std::cout<<"Avinash NM"<<Utils::NormalizeMac(B)<<std::endl;
-		std::string A="";
-		//std::cout<<"Avinash S2N:"<<Utils::SerialNumberToInt(A)<<std::endl;
-
 		if (!KafkaManager()->Enabled()) {
-			poco_warning(Logger(),
-						 "Kafka CnC server enabled but KafkaManager is disabled (openwifi.kafka.enable=false).");
-			return 0;
+			poco_warning(Logger(), "Kafka server enabled but KafkaManager is disabled (openwifi.kafka.enable=false).");
+			 std::exit(Poco::Util::Application::EXIT_CONFIG);
 		}
 
 		if (WatcherId_ == 0) {
@@ -53,38 +45,10 @@ namespace OpenWifi {
 			};
 			WatcherId_ = KafkaManager()->RegisterTopicWatcher(KafkaTopics::CNC_RES, F);
 		}
-
-		AllowSerialNumberMismatch_ =
-			MicroServiceConfigGetBool("openwifi.certificates.allowmismatch", true);
-		MismatchDepth_ = MicroServiceConfigGetInt("openwifi.certificates.mismatchdepth", 2);
-		SessionTimeOut_ = MicroServiceConfigGetInt("openwifi.session.timeout", 10 * 60);
-		KafkaDisableState_ = MicroServiceConfigGetBool("openwifi.kafka.disablestate", false);
-		KafkaDisableHealthChecks_ =
-			MicroServiceConfigGetBool("openwifi.kafka.disablehealthchecks", false);
-
-		Running_ = true;
-		GarbageCollector_.setName("kafka:garbage");
-		GarbageCollector_.start(*this);
-		auto ProvString = MicroServiceConfigGetString("autoprovisioning.process", "default");
-		if (ProvString != "default") {
-			auto Tokens = Poco::StringTokenizer(ProvString, ",");
-			for (const auto &i : Tokens) {
-				if (i == "prov")
-					LookAtProvisioning_ = true;
-				else
-					UseDefaultConfig_ = true;
-			}
-		} else {
-			UseDefaultConfig_ = true;
-		}
-
-		SimulatorId_ = Poco::toLower(MicroServiceConfigGetString("simulatorid", ""));
-		SimulatorEnabled_ = !SimulatorId_.empty();
-		std::thread CleanupThread([this]() { CleanupSessions(); });
-		CleanupThread.detach();
-
-		poco_information(Logger(),
-						 fmt::format("Kafka CnC server started."));
+		GarbageCollectorName="KFK-Session-Janitor";
+		ReadEnvironment();
+		SetJanitor("kafka:garbage");
+		poco_information(Logger(), fmt::format("Kafka server started."));
 		return 0;
 	}
 
@@ -108,42 +72,6 @@ namespace OpenWifi {
 		if (!Running_) {
 			return;
 		}
-		/* ori-Code
-		try {
-			Poco::JSON::Parser parser;
-			auto parsed = parser.parse(payload).extract<Poco::JSON::Object::Ptr>();
-			if (!parsed) {
-				return;
-			}
-
-			Poco::JSON::Object::Ptr msg;
-			std::string forwardedPayload;
-			if (parsed->isObject("payload")) {
-				msg = parsed->getObject("payload");
-				std::ostringstream os;
-				msg->stringify(os);
-				forwardedPayload = os.str();
-			} else {
-				msg = parsed;
-				forwardedPayload = payload;
-			}
-
-			if (msg->has("type")) {
-				auto t = msg->get("type").toString();
-				if (t == "infra_join") {
-					return HandleInfraJoin(msg, key);
-				}
-				if (t == "infra_leave") {
-					return HandleInfraLeave(msg, key);
-				}
-			}
-
-			return HandleDeviceMessage(msg, key, forwardedPayload);
-		} catch (const Poco::Exception &E) {
-			Logger().log(E);
-		} catch (...) {
-		}
-		*/
 		std::string forwardedPayload;
 		try {
 			Poco::JSON::Parser parser;
@@ -157,12 +85,13 @@ namespace OpenWifi {
 				if (type == "infra_leave") {
 					return HandleInfraLeave(msg, key);
 				}
+				poco_warning(Logger(), fmt::format("Message Type Invalid: {}",type));
+				return;
 			}
 
 			return HandleDeviceMessage(msg, key, forwardedPayload);
 		} catch (const Poco::Exception &E) {
 			Logger().log(E);
-		} catch (...) {
 		}
 
 	}
@@ -191,14 +120,20 @@ namespace OpenWifi {
 			poco_warning(Logger(), "Infra_join connect payload missing params.serial.");
 			return;
 		}
-		auto serial = Poco::trim(Poco::toLower(params->get("serial").toString()));
+
+		auto serial = Poco::trim(Poco::toLower(params->get("serial").toString())); 
+		
+		if (serial.empty()){
+			poco_warning(Logger(), fmt::format("Infra_join serial empty for this IP: {}", IP));
+			return;	
+		}	
 		
 		if (!Utils::NormalizeMac(InfraSerial)) {
 			poco_warning(Logger(), fmt::format("Infra_join Invalid infra_group_infra: {}", InfraSerial));
 			return;
 		}
 
-		if(serial.empty() || !Utils::ValidSerialNumber(serial)){
+		if(!Utils::ValidSerialNumber(serial)){
 			poco_warning(Logger(), fmt::format("Infra_join Invalid serial: {}", serial));
 			return;	
 		}
@@ -250,6 +185,7 @@ namespace OpenWifi {
 
 		auto Conn = GetConnection(serialInt);
 		if (!Conn) {
+			poco_information(Logger(), fmt::format("Infra_leave:AP_Connection not found: {}", InfraSerial));
 			return;
 		}
 
@@ -285,11 +221,11 @@ namespace OpenWifi {
 		conn->ProcessIncomingPayload(rawPayload);
 	}
 
-	void AP_KAFKA_Server::run() {
+	/*void AP_KAFKA_Server::run() {
 		uint64_t last_log = Utils::Now(), last_zombie_run = 0, last_garbage_run = 0;
 
 		Poco::Logger &LocalLogger =
-			Poco::Logger::create("KafkaCnc-Session-Janitor", Poco::Logger::root().getChannel(),
+			Poco::Logger::create("Kafka-Session-Janitor", Poco::Logger::root().getChannel(),
 								 Poco::Logger::root().getLevel());
 
 		while (Running_) {
@@ -432,5 +368,5 @@ namespace OpenWifi {
 			}
 		}
 	}
-
+	*/
 } // namespace OpenWifi
