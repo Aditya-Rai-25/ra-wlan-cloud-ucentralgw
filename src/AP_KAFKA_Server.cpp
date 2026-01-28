@@ -34,8 +34,8 @@ namespace OpenWifi {
 	int AP_KAFKA_Server::Start() {
 
 		if (!KafkaManager()->Enabled()) {
-			poco_warning(Logger(), "Kafka server enabled but KafkaManager is disabled (openwifi.kafka.enable=false).");
-			 std::exit(Poco::Util::Application::EXIT_CONFIG);
+			poco_fatal(Logger(), "KafkaManager is disabled hence exiting............");
+			std::exit(Poco::Util::Application::EXIT_CONFIG);
 		}
 
 		if (WatcherId_ == 0) {
@@ -72,7 +72,6 @@ namespace OpenWifi {
 		if (!Running_) {
 			return;
 		}
-		std::string forwardedPayload;
 		try {
 			Poco::JSON::Parser parser;
 			Poco::JSON::Object::Ptr msg;
@@ -89,7 +88,7 @@ namespace OpenWifi {
 				return;
 			}
 
-			return HandleDeviceMessage(msg, key, forwardedPayload);
+			return HandleDeviceMessage(msg, key, payload);
 		} catch (const Poco::Exception &E) {
 			Logger().log(E);
 		}
@@ -111,17 +110,17 @@ namespace OpenWifi {
 		}
 		Poco::JSON::Parser parser;
 		auto connectParsed = parser.parse(ConnectPayload).extract<Poco::JSON::Object::Ptr>();
-		if (!connectParsed || !connectParsed->isObject("params")) {
+		if (!connectParsed || !connectParsed->isObject(uCentralProtocol::PARAMS)) {
 			poco_warning(Logger(), "Infra_join has invalid 'connect' payload.");
 			return;
 		}
-		auto params = connectParsed->getObject("params");
+		auto params = connectParsed->getObject(uCentralProtocol::PARAMS);
 		if (!params->has("serial")) {
 			poco_warning(Logger(), "Infra_join connect payload missing params.serial.");
 			return;
 		}
 
-		auto serial = Poco::trim(Poco::toLower(params->get("serial").toString())); 
+		auto serial = Poco::trim(Poco::toLower(params->get(uCentralProtocol::SERIAL).toString())); 
 		
 		if (serial.empty()){
 			poco_warning(Logger(), fmt::format("Infra_join serial empty for this IP: {}", IP));
@@ -153,7 +152,15 @@ namespace OpenWifi {
 		AddConnection(NewConnection);
 		NewConnection->Start();
 		NewConnection->setEssentials(IP,InfraSerial);		
-		NewConnection->ProcessIncomingPayload(ConnectPayload);
+		{
+			std::lock_guard G(NewConnection->ConnectionMutex_);
+			if (!NewConnection->PendingPayload_.empty()) {
+				poco_warning(Logger(),
+							 fmt::format("Infra_join overwriting pending payload for {}", serial));
+			}
+			NewConnection->PendingPayload_ = ConnectPayload;
+		}
+		NewConnection->ProcessIncomingFrame();
 		poco_information(Logger(),
 						 fmt::format("Infra_join: connected {} session={} key='{}'", serial, sessionId,
 									 key));
@@ -166,14 +173,9 @@ namespace OpenWifi {
 			return;
 		}
 
-		if (!Utils::NormalizeMac(InfraSerial)) {
-			poco_warning(Logger(), fmt::format("Infra_join Invalid infra_group_infra: {}", InfraSerial));
+		if (!Utils::NormalizeMac(InfraSerial) || !Utils::ValidSerialNumber(InfraSerial)) {
+			poco_warning(Logger(), fmt::format("Invalid serial: {}", InfraSerial));
 			return;
-		}
-
-		if(!Utils::ValidSerialNumber(InfraSerial)){
-			poco_warning(Logger(), fmt::format("Infra_join Invalid serial: {}", InfraSerial));
-			return;	
 		}
 
 		auto serialInt = Utils::SerialNumberToInt(InfraSerial);
@@ -194,179 +196,73 @@ namespace OpenWifi {
 	}
 
 	void AP_KAFKA_Server::HandleDeviceMessage(Poco::JSON::Object::Ptr msg, const std::string &key,
-											 const std::string &rawPayload) {
-		std::string serial;
-		if (msg && msg->isObject("params")) {
-			auto params = msg->getObject("params");
-			if (params->has("serial")) {
-			//	serial = StripSeparatorsToSerial(params->get("serial").toString());
-			}
-		}
-		if (serial.empty()) {
-			//serial = StripSeparatorsToSerial(key);
-		}
-		if (!Utils::ValidSerialNumber(serial)) {
-			poco_warning(Logger(), fmt::format("Unroutable Kafka message key='{}'", key));
+											 const std::string &payload) {	
+		if (!msg) {
+			poco_warning(Logger(), fmt::format("Kafka msg: null JSON object. key='{}'", key));
 			return;
 		}
-		auto serialInt = Utils::SerialNumberToInt(serial);
 
-		auto baseConn = GetConnection(serialInt);
-		auto conn = std::dynamic_pointer_cast<AP_KAFKA_Connection>(baseConn);
-		if (!conn) {
+		std::string serial;
+		if (msg->has(uCentralProtocol::METHOD)) {
+			if (Poco::trim(msg->get(uCentralProtocol::METHOD).toString()).empty()) {
+				poco_warning(Logger(), fmt::format("Missing/empty METHOD. key='{}'", key));
+				return;
+			}
+
+			Poco::JSON::Object::Ptr params;
+			if (!msg->isObject(uCentralProtocol::PARAMS) ||
+				!(params = msg->getObject(uCentralProtocol::PARAMS)) || params->size() == 0) {
+				poco_warning(Logger(), fmt::format("Missing/empty PARAMS. key='{}'", key));
+				return;
+			}
+
+			if (!params->has(uCentralProtocol::SERIAL)) {
+				poco_warning(Logger(), fmt::format("Missing PARAMS.SERIAL. key='{}'", key));
+				return;
+			}
+
+			serial = Poco::trim(Poco::toLower(params->get(uCentralProtocol::SERIAL).toString()));
+			if (serial.empty()) {
+				poco_warning(Logger(), fmt::format("Empty PARAMS.SERIAL. key='{}'", key));
+				return;
+			}
+		} else {
+			Poco::JSON::Object::Ptr result;
+			if (!msg->isObject(uCentralProtocol::RESULT) ||
+				!(result = msg->getObject(uCentralProtocol::RESULT)) || result->size() == 0) {
+				poco_warning(Logger(), fmt::format("Missing/empty RESULT. key='{}'", key));
+				return;
+			}
+			if (!result->has(uCentralProtocol::SERIAL)) {
+				poco_warning(Logger(), fmt::format("Missing RESULT.SERIAL. key='{}'", key));
+				return;
+			}
+			serial = Poco::trim(Poco::toLower(result->get(uCentralProtocol::SERIAL).toString()));
+			if (serial.empty()) {
+				poco_warning(Logger(), fmt::format("Empty RESULT.SERIAL. key='{}'", key));
+				return;
+			}
+		}
+		if (!Utils::NormalizeMac(serial) || !Utils::ValidSerialNumber(serial)) {
+			poco_warning(Logger(), fmt::format("Invalid serial: {}", serial));
+			return;
+		}
+
+		auto Conn = GetConnection(Utils::SerialNumberToInt(serial));
+		if (!Conn) {
 			poco_warning(Logger(), fmt::format("Kafka msg for non-connected device: {}", serial));
 			return;
 		}
-
-		conn->ProcessIncomingPayload(rawPayload);
-	}
-
-	/*void AP_KAFKA_Server::run() {
-		uint64_t last_log = Utils::Now(), last_zombie_run = 0, last_garbage_run = 0;
-
-		Poco::Logger &LocalLogger =
-			Poco::Logger::create("Kafka-Session-Janitor", Poco::Logger::root().getChannel(),
-								 Poco::Logger::root().getLevel());
-
-		while (Running_) {
-			if (!Poco::Thread::trySleep(30000)) {
-				break;
+		auto KafkaConn = std::static_pointer_cast<AP_KAFKA_Connection>(Conn);
+		{
+			std::lock_guard G(KafkaConn->ConnectionMutex_);
+			if (!KafkaConn->PendingPayload_.empty()) {
+				poco_warning(Logger(), fmt::format("Overwriting pending payload for {}", serial));
 			}
-
-			uint64_t total_connected_time = 0, now = Utils::Now();
-
-			if (now - last_zombie_run > 60) {
-				try {
-					NumberOfConnectingDevices_ = 0;
-					AverageDeviceConnectionTime_ = 0;
-
-					int waits = 0;
-					for (int hashIndex = 0; hashIndex < MACHash::HashMax(); hashIndex++) {
-						last_zombie_run = now;
-						waits = 0;
-						while (true) {
-							if (SerialNumbersMutex_[hashIndex].try_lock()) {
-								waits = 0;
-								auto hint = SerialNumbers_[hashIndex].begin();
-								while (hint != end(SerialNumbers_[hashIndex])) {
-									if (hint->second == nullptr) {
-										hint = SerialNumbers_[hashIndex].erase(hint);
-									} else {
-										auto Device = hint->second;
-										auto RightNow = Utils::Now();
-										if (Device->Dead_) {
-											AddCleanupSession(Device->State_.sessionId,
-															  Device->SerialNumberInt_);
-											++hint;
-										} else if (RightNow > Device->LastContact_ &&
-												   (RightNow - Device->LastContact_) >
-													   SessionTimeOut_) {
-											poco_information(
-												LocalLogger,
-												fmt::format(
-													"{}: Session seems idle. Controller disconnecting device.",
-													Device->SerialNumber_));
-											AddCleanupSession(Device->State_.sessionId,
-															  Device->SerialNumberInt_);
-											++hint;
-										} else {
-											if (Device->State_.Connected) {
-												total_connected_time +=
-													(RightNow - Device->State_.started);
-											}
-											++hint;
-										}
-									}
-								}
-								SerialNumbersMutex_[hashIndex].unlock();
-								break;
-							} else if (waits < 5) {
-								waits++;
-								Poco::Thread::trySleep(10);
-							} else {
-								break;
-							}
-						}
-					}
-
-					LeftOverSessions_ = 0;
-					for (int i = 0; i < SessionHash::HashMax(); i++) {
-						waits = 0;
-						while (true) {
-							if (SessionMutex_[i].try_lock()) {
-								waits = 0;
-								auto hint = Sessions_[i].begin();
-								auto RightNow = Utils::Now();
-								while (hint != end(Sessions_[i])) {
-									if (hint->second == nullptr) {
-										hint = Sessions_[i].erase(hint);
-									} else if (hint->second->Dead_) {
-										AddCleanupSession(hint->second->State_.sessionId,
-														  hint->second->SerialNumberInt_);
-										++hint;
-									} else if (RightNow > hint->second->LastContact_ &&
-											   (RightNow - hint->second->LastContact_) >
-												   SessionTimeOut_) {
-										poco_information(
-											LocalLogger,
-											fmt::format(
-												"{}: Session seems idle. Controller disconnecting device.",
-												hint->second->SerialNumber_));
-										AddCleanupSession(hint->second->State_.sessionId,
-														  hint->second->SerialNumberInt_);
-										++hint;
-									} else {
-										++LeftOverSessions_;
-										++hint;
-									}
-								}
-								SessionMutex_[i].unlock();
-								break;
-							} else if (waits < 5) {
-								Poco::Thread::trySleep(10);
-								waits++;
-							} else {
-								break;
-							}
-						}
-					}
-
-					AverageDeviceConnectionTime_ =
-						NumberOfConnectedDevices_ > 0
-							? total_connected_time / NumberOfConnectedDevices_
-							: 0;
-				} catch (const Poco::Exception &E) {
-					poco_error(LocalLogger,
-							   fmt::format("Poco::Exception: Garbage collecting failed: {}",
-										   E.displayText()));
-				} catch (const std::exception &E) {
-					poco_error(LocalLogger,
-							   fmt::format("std::exception: Garbage collecting failed: {}", E.what()));
-				} catch (...) {
-					poco_error(LocalLogger, "exception: Garbage collecting failed: unknown");
-				}
-			}
-
-			if (NumberOfConnectedDevices_) {
-				if (last_garbage_run > 0) {
-					AverageDeviceConnectionTime_ += (now - last_garbage_run);
-				}
-			}
-
-			try {
-				if ((now - last_log) > 60) {
-					last_log = now;
-					poco_information(
-						LocalLogger,
-						fmt::format(
-							"Active AP connections: {} Connecting: {} Average connection time: {} seconds. Left Over Sessions: {}",
-							NumberOfConnectedDevices_, NumberOfConnectingDevices_,
-							AverageDeviceConnectionTime_, LeftOverSessions_));
-				}
-				last_garbage_run = now;
-			} catch (...) {
-			}
+			KafkaConn->PendingPayload_ = payload;
 		}
-	}
-	*/
-} // namespace OpenWifi
+		KafkaConn->ProcessIncomingFrame();
+		}
+		
+
+	} // namespace OpenWifi

@@ -35,7 +35,7 @@ namespace OpenWifi {
 		void HandleInfraJoin(Poco::JSON::Object::Ptr msg, const std::string &key);
 		void HandleInfraLeave(Poco::JSON::Object::Ptr msg, const std::string &key);
 		void HandleDeviceMessage(Poco::JSON::Object::Ptr msg, const std::string &key,
-								 const std::string &rawPayload);
+								 const std::string &payload);
 
 		AP_KAFKA_Server() noexcept : AP_Server("KafkaServer", "KAFKA-SERVER", "ucentral.kafka") {}
 	};

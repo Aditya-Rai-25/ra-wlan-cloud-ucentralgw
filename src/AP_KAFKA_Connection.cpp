@@ -17,35 +17,12 @@
 
 #include "AP_ServerProvider.h"
 #include "StorageService.h"
+#include "framework/KafkaManager.h"
 #include "framework/MicroServiceFuncs.h"
 #include "framework/ow_constants.h"
 #include "framework/utils.h"
 
 namespace OpenWifi {
-
-
-	// void AP_KAFKA_Connection:: TryEnsureSerialFromEvent(const Poco::JSON::Object::Ptr &obj) {
-	// 		if (SerialNumberInt_ != 0 || obj.isNull()) {
-	// 			return;
-	// 		}
-	// 		if (!obj->has(uCentralProtocol::JSONRPC) || !obj->has(uCentralProtocol::PARAMS)) {
-	// 			return;
-	// 		}
-	// 		if (!obj->isObject(uCentralProtocol::PARAMS)) {
-	// 			return;
-	// 		}
-	// 		auto params = obj->getObject(uCentralProtocol::PARAMS);
-	// 		if (!params->has(uCentralProtocol::SERIAL)) {
-	// 			return;
-	// 		}
-	// 		auto serial = Poco::trim(Poco::toLower(params->get(uCentralProtocol::SERIAL).toString()));
-	// 		serial = StripSeparatorsToSerial(serial);
-	// 		if (!Utils::ValidSerialNumber(serial)) {
-	// 			return;
-	// 		}
-	// 		SerialNumber_ = serial;
-	// 		SerialNumberInt_ = Utils::SerialNumberToInt(serial);
-	// 	}
 
 	AP_KAFKA_Connection::AP_KAFKA_Connection(Poco::Logger &L,
 											 std::shared_ptr<LockedDbSession> session,
@@ -78,18 +55,33 @@ namespace OpenWifi {
 	}
 
 	void AP_KAFKA_Connection::ProcessIncomingFrame() {
-		if (PendingPayload_.empty()) {
+		if (Dead_) {
 			return;
 		}
-		auto payload = PendingPayload_;
-		PendingPayload_.clear();
+
+		std::string payload;
+		{
+			std::lock_guard G(ConnectionMutex_);
+			if (PendingPayload_.empty()) {
+				return;
+			}
+			State_.LastContact = LastContact_ = Utils::Now();
+			State_.RX += PendingPayload_.size();
+			GetAPServer()->AddRX(PendingPayload_.size());
+			State_.MessageCount++;
+			if (!(DeviceValidated_ || ValidatedDevice())) {
+				return;
+			}
+			payload = PendingPayload_;
+			PendingPayload_.clear();
+		}
+
+		bool KillConnection = false;
 
 		try {
 			Poco::JSON::Parser parser;
 			auto parsed = parser.parse(payload);
 			auto obj = parsed.extract<Poco::JSON::Object::Ptr>();
-
-		//	TryEnsureSerialFromEvent(obj);
 
 			if (obj->has(uCentralProtocol::JSONRPC)) {
 				if (obj->has(uCentralProtocol::METHOD) && obj->has(uCentralProtocol::PARAMS)) {
@@ -100,7 +92,6 @@ namespace OpenWifi {
 					poco_warning(Logger_,
 								 fmt::format("INVALID-PAYLOAD({}): Payload is not JSON-RPC 2.0: {}",
 											 CId_, payload));
-					Errors_++;
 				}
 			} else if (obj->has(uCentralProtocol::RADIUS)) {
 				ProcessIncomingRadiusData(obj);
@@ -111,25 +102,25 @@ namespace OpenWifi {
 					Logger_,
 					fmt::format("FRAME({}): illegal transaction header, missing 'jsonrpc': {}", CId_,
 								os.str()));
-				Errors_++;
 			}
+
 		} catch (const Poco::Exception &E) {
 			Logger_.log(E);
-			Errors_++;
+			KillConnection=true;
 		} catch (const std::exception &E) {
 			poco_warning(Logger_,
 						 fmt::format("std::exception({}): {} Payload:{} Session:{}", CId_, E.what(),
 									 payload, State_.sessionId));
-			Errors_++;
+			KillConnection=true;
 		} catch (...) {
 			poco_error(Logger_,
 					   fmt::format("UnknownException({}): Payload:{} Session:{}", CId_, payload,
 								   State_.sessionId));
-			Errors_++;
+			KillConnection=true;
 		}
 
-		if (Errors_ >= 1) {
-			poco_warning(Logger_, fmt::format("DISCONNECTING({}): Errors: {}", CId_, Errors_));
+		if (KillConnection) {
+			poco_warning(Logger_, fmt::format("DISCONNECTING({}): Errors: {}", CId_, KillConnection));
 			EndConnection();
 		}
 	}
@@ -140,23 +131,6 @@ namespace OpenWifi {
 		CId_= Address_ = IP;
 		SerialNumberInt_ = Utils::SerialNumberToInt(SerialNumber_);
 		
-	}
-
-
-	void AP_KAFKA_Connection::ProcessIncomingPayload(const std::string &payload) {
-		if (Dead_) {
-			return;
-		}
-		std::lock_guard G(ConnectionMutex_);
-
-		State_.LastContact = LastContact_ = Utils::Now();
-		State_.RX += payload.size();
-		GetAPServer()->AddRX(payload.size());
-		State_.MessageCount++;
-		if(DeviceValidated_ || ValidatedDevice()){
-			PendingPayload_ = payload;
-			ProcessIncomingFrame();
-		}
 	}
 
 	bool AP_KAFKA_Connection::Send(const std::string &Payload) {

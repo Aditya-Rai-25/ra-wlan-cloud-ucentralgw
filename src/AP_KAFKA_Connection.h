@@ -34,10 +34,6 @@ namespace OpenWifi {
 
 	  private:
 		friend class AP_KAFKA_Server;
-
-
-		void ProcessIncomingPayload(const std::string &payload);
- 		void TryEnsureSerialFromEvent(const Poco::JSON::Object::Ptr &obj);
 		std::string PendingPayload_;
 	};
 
