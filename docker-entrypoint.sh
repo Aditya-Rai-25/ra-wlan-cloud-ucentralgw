@@ -76,6 +76,7 @@ if [[ "$TEMPLATE_CONFIG" = 'true' ]]; then
     CERTIFICATES_ALLOWMISMATCH=${CERTIFICATES_ALLOWMISMATCH:-"false"} \
     IPINFO_DEFAULT_COUNTRY=${IPINFO_DEFAULT_COUNTRY:-"US"} \
     DEVICE_SESSION_TIMEOUT=${DEVICE_SESSION_TIMEOUT:-"600"} \
+    LOGGING_LEVEL=${LOGGING_LEVEL:-"information"} \
     envsubst < /"${APP_NAME}".properties.tmpl > "${APP_CONFIG}"/"${APP_NAME}".properties
 fi
 
