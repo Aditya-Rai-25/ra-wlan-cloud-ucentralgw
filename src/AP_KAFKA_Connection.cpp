@@ -11,6 +11,7 @@
 #include <Poco/JSON/Object.h>
 #include <Poco/JSON/Parser.h>
 #include <Poco/Net/IPAddress.h>
+#include <Poco/Net/SocketAddress.h>
 #include <Poco/String.h>
 
 #include <fmt/format.h>
@@ -136,6 +137,8 @@ namespace OpenWifi {
 		CId_= Address_ = IP;
 		SerialNumberInt_ = Utils::SerialNumberToInt(SerialNumber_);
 		InfraGroupId_ = InfraGroupId;
+		Poco::Net::SocketAddress IPAddress(IP);
+        PeerAddress_= IPAddress.host();
 		
 	}
 
@@ -153,6 +156,7 @@ namespace OpenWifi {
 					
 			State_.Connected = true;
 			State_.started = State_.LastContact = LastContact_ ;
+			State_.Address = DeviceInfo.ipAddress;
 			
 	}
 

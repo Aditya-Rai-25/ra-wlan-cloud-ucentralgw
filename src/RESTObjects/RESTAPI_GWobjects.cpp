@@ -68,6 +68,7 @@ namespace OpenWifi::GWObjects {
 		field_to_json(Obj, "lastRecordedContact", lastRecordedContact);
 		field_to_json(Obj, "certificateExpiryDate", certificateExpiryDate);
 		field_to_json(Obj, "connectReason", connectReason);
+		field_to_json(Obj, "ipAddress", ipAddress);
 	}
 
 	void Device::to_json_with_status(Poco::JSON::Object &Obj) const {
@@ -139,6 +140,7 @@ namespace OpenWifi::GWObjects {
 			field_from_json(Obj, "lastRecordedContact", lastRecordedContact);
 			field_from_json(Obj, "certificateExpiryDate", certificateExpiryDate);
 			field_from_json(Obj, "connectReason", connectReason);
+			field_from_json(Obj, "ipAddress", ipAddress);
 			return true;
 		} catch (const Poco::Exception &E) {
 		}

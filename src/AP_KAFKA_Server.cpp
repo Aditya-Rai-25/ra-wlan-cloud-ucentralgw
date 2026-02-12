@@ -132,7 +132,7 @@ namespace OpenWifi {
 			KafkaConn = std::make_shared<AP_KAFKA_Connection>(Logger(), Session, sessionId);
 			AddConnection(KafkaConn);
 			KafkaConn->Start();
-			KafkaConn->setEssentials("", serial, DeviceInfo.infraGroupId);
+			KafkaConn->setEssentials(DeviceInfo.ipAddress, serial, DeviceInfo.infraGroupId);
 			KafkaConn->setRecreation(DeviceInfo);
 			StartSession(sessionId, KafkaConn->SerialNumberInt_);
 
