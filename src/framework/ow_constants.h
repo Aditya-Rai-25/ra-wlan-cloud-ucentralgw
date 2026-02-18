@@ -850,6 +850,14 @@ namespace OpenWifi::Platforms {
 	static const std::string AP = "ap";
 	static const std::string SWITCH = "switch";
 	static const std::string OLG = "olg";
+
+	inline bool IsValidPlatform(const std::string &Value) {
+		return Value == AP || Value == SWITCH || Value == OLG;
+	}
+
+	inline bool IsValidPlatformOrAll(const std::string &Value) {
+		return Value == "all" || IsValidPlatform(Value);
+	}
 }
 
 #if defined(__GNUC__)

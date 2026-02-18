@@ -4142,6 +4142,7 @@ static std::string DefaultAPSchema = R"foo(
 }
 
 )foo";
+// TODO(OLG): OLG is currently validated with AP schema; replace with dedicated OLG schema when available.
 static std::string DefaultOLGSchema = DefaultAPSchema;
 
 static std::string DefaultSWITCHSchema = R"foo(

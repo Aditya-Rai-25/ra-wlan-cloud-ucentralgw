@@ -93,7 +93,7 @@ namespace OpenWifi {
 		auto completeInfo = GetBoolParameter("completeInfo", false);
 		auto includeProvisioned = GetBoolParameter("includeProvisioned", true);
 
-		if(!platform.empty() && (platform!=Platforms::AP && platform!=Platforms::SWITCH && platform!=Platforms::OLG && platform!="all")) {
+		if (!platform.empty() && !Platforms::IsValidPlatformOrAll(platform)) {
 			return BadRequest(RESTAPI::Errors::MissingOrInvalidParameters);
 		}
 
